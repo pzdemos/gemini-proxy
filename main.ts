@@ -1,14 +1,28 @@
 // main.ts - Deno Google AI API 服务器
 import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { oakCors } from "https://deno.land/x/cors@v1.2.2/mod.ts";
+import * as os from "node:os";
 
 // 配置
 const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY") || "";
 const PORT = Number(Deno.env.get("PORT")) || 8000;
 
 // Google AI API 配置
-const MODEL_NAME = "gemini-2.0-flash-exp"; // 可选: gemini-2.5-flash, gemini-2.0-flash-exp
+const MODEL_NAME = "gemini-2.0-flash-exp"; 
 const GOOGLE_AI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent`;
+
+// 获取服务器 IP 地址的函数
+function getServerIpAddress(): string | undefined {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return undefined; 
+}
 
 // 路由
 const router = new Router();
@@ -50,7 +64,6 @@ router.get("/api/models", async (ctx) => {
 
     const data = await response.json();
     
-    // 过滤出支持 generateContent 的模型
     const generativeModels = data.models?.filter((model: any) => 
       model.supportedGenerationMethods?.includes("generateContent")
     ) || [];
@@ -89,7 +102,6 @@ router.post("/api/generate", async (ctx) => {
       return;
     }
 
-    // 调用 Google AI API
     const response = await fetch(GOOGLE_AI_ENDPOINT, {
       method: "POST",
       headers: {
@@ -192,6 +204,21 @@ app.addEventListener("error", (evt) => {
 });
 
 // 启动服务器
-console.log(`🚀 Server running on http://localhost:${PORT}`);
+const serverIp = getServerIpAddress();
+const serverUrl = serverIp ? `http://${serverIp}:${PORT}` : `http://localhost:${PORT}`;
+
+console.log(`🚀 Server running on ${serverUrl}`);
 console.log(`📝 API Key configured: ${GOOGLE_AI_API_KEY ? "Yes" : "No"}`);
+
+// 使用 await 确保 fetch 请求完成
+if (serverIp && serverIp !== '127.0.0.1') {
+  try {
+    const res = await fetch(`https://ipinfo.io/${serverIp}`);
+    const data = await res.json();
+    console.log(`🌐 Accessible externally at ${data}`);
+  } catch (err) {
+    console.error(`Error fetching external IP info: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
+}
+
 await app.listen({ port: PORT });

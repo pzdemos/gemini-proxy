@@ -1,9 +1,17 @@
 {
-    "tasks": {
-      "dev": "deno run --allow-net --allow-env --allow-read --env --watch main.ts",
-      "start": "deno run --allow-net --allow-env --allow-read --env main.ts"
-    },
-    "imports": {
-      "oak": "https://deno.land/x/oak@v12.6.1/mod.ts"
-    }
+  "tasks": {
+    "dev": "deno run --allow-net --allow-env --allow-read --allow-sys --env --watch main.ts",
+    "start": "deno run --allow-net --allow-env --allow-read --allow-sys --env main.ts"
+  },
+  "imports": {
+    "oak": "https://deno.land/x/oak@v12.6.1/mod.ts"
+  },
+  "deploy": {
+    "project": "b90ec008-3597-4862-a277-471dbfcd8932",
+    "exclude": [
+      "**/node_modules"
+    ],
+    "include": [],
+    "entrypoint": "main.ts"
   }
+}
