@@ -1,15 +1,21 @@
+// Fix: Add Deno type reference to resolve "Cannot find name 'Deno'" errors.
+/// <reference types="https://deno.land/x/deno/cli/types/dts/index.d.ts" />
 // main.ts - Deno Google AI API 服务器
 import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { oakCors } from "https://deno.land/x/cors@v1.2.2/mod.ts";
 import * as os from "node:os";
 
 // 配置
-const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY") || "";
+// Fix: Use API_KEY from environment variables as per guidelines.
+const API_KEY = Deno.env.get("API_KEY") || "";
 const PORT = Number(Deno.env.get("PORT")) || 8000;
 
 // Google AI API 配置
-const MODEL_NAME = "gemini-2.0-flash-exp"; 
-const GOOGLE_AI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent`;
+// Fix: Update deprecated model name to a recommended one.
+const MODEL_NAME = "gemini-2.5-flash"; // 保留用于旧接口
+const CHAT_MODEL = "gemini-2.5-flash";
+const IMAGE_MODEL = "gemini-2.5-flash-image";
+const GOOGLE_AI_BASE_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/";
 
 // 获取服务器 IP 地址的函数
 function getServerIpAddress(): string | undefined {
@@ -21,7 +27,7 @@ function getServerIpAddress(): string | undefined {
       }
     }
   }
-  return undefined; 
+  return undefined;
 }
 
 // 路由
@@ -40,19 +46,19 @@ router.get("/api/health", (ctx) => {
 // 列出可用模型
 router.get("/api/models", async (ctx) => {
   try {
-    if (!GOOGLE_AI_API_KEY) {
+    if (!API_KEY) {
       ctx.response.status = 500;
       ctx.response.body = { error: "API key not configured" };
       return;
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models`,
-      {
-        headers: {
-          "x-goog-api-key": GOOGLE_AI_API_KEY,
+        `https://generativelanguage.googleapis.com/v1beta/models`,
+        {
+          headers: {
+            "x-goog-api-key": API_KEY,
+          }
         }
-      }
     );
 
     if (!response.ok) {
@@ -63,9 +69,9 @@ router.get("/api/models", async (ctx) => {
     }
 
     const data = await response.json();
-    
-    const generativeModels = data.models?.filter((model: any) => 
-      model.supportedGenerationMethods?.includes("generateContent")
+
+    const generativeModels = data.models?.filter((model: any) =>
+        model.supportedGenerationMethods?.includes("generateContent")
     ) || [];
 
     ctx.response.body = {
@@ -84,7 +90,97 @@ router.get("/api/models", async (ctx) => {
   }
 });
 
-// Google AI 文本生成端点
+// 新增：为 Nexus App 定制的生成接口
+router.post("/api/nexus-generate", async (ctx) => {
+  try {
+    if (!API_KEY) {
+      ctx.response.status = 500;
+      ctx.response.body = { error: "API key not configured" };
+      return;
+    }
+
+    const body = await ctx.request.body({ type: "json" }).value;
+    const { prompt, image, mode } = body;
+
+    if (!mode || (mode !== 'chat' && mode !== 'image')) {
+      ctx.response.status = 400;
+      ctx.response.body = { error: "Mode ('chat' or 'image') is required" };
+      return;
+    }
+    if (!prompt && !image) {
+      ctx.response.status = 400;
+      ctx.response.body = { error: "Prompt or image is required" };
+      return;
+    }
+
+    let model, endpointUrl;
+    const parts = [];
+
+    if (prompt) {
+      parts.push({ text: prompt });
+    }
+    if (image && image.base64 && image.mimeType) {
+      parts.push({
+        inlineData: {
+          mimeType: image.mimeType,
+          data: image.base64,
+        },
+      });
+    }
+
+    const payload: { contents: { parts: any[] }[], generationConfig?: any } = {
+      contents: [{ parts }],
+    };
+
+    if (mode === 'image') {
+      model = IMAGE_MODEL;
+      // Fix: Add generationConfig with responseModalities for image generation as required by the model.
+      payload.generationConfig = {
+        responseModalities: ["IMAGE"],
+      };
+    } else { // mode === 'chat'
+      model = CHAT_MODEL;
+    }
+
+    endpointUrl = `${GOOGLE_AI_BASE_ENDPOINT}${model}:generateContent`;
+
+    const apiResponse = await fetch(endpointUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": API_KEY,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!apiResponse.ok) {
+      const errorText = await apiResponse.text();
+      console.error("Google AI API Error:", errorText);
+      ctx.response.status = apiResponse.status;
+      // 尝试解析JSON错误，否则返回纯文本
+      try {
+        ctx.response.body = JSON.parse(errorText);
+      } catch {
+        ctx.response.body = { error: "Failed to generate response from Google AI", details: errorText };
+      }
+      return;
+    }
+
+    const data = await apiResponse.json();
+    ctx.response.body = data; // 直接转发完整响应
+
+  } catch (error) {
+    console.error("Error in /api/nexus-generate:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      error: "Internal server error",
+      message: error.message
+    };
+  }
+});
+
+
+// Google AI 文本生成端点 (旧接口，保持不变)
 router.post("/api/generate", async (ctx) => {
   try {
     const body = await ctx.request.body({ type: "json" }).value;
@@ -96,17 +192,17 @@ router.post("/api/generate", async (ctx) => {
       return;
     }
 
-    if (!GOOGLE_AI_API_KEY) {
+    if (!API_KEY) {
       ctx.response.status = 500;
       ctx.response.body = { error: "API key not configured" };
       return;
     }
 
-    const response = await fetch(GOOGLE_AI_ENDPOINT, {
+    const response = await fetch(`${GOOGLE_AI_BASE_ENDPOINT}${MODEL_NAME}:generateContent`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-goog-api-key": GOOGLE_AI_API_KEY,
+        "x-goog-api-key": API_KEY,
       },
       body: JSON.stringify({
         contents: [{
@@ -128,7 +224,7 @@ router.post("/api/generate", async (ctx) => {
     }
 
     const data = await response.json();
-    
+
     ctx.response.body = {
       success: true,
       response: data.candidates?.[0]?.content?.parts?.[0]?.text || "",
@@ -141,14 +237,14 @@ router.post("/api/generate", async (ctx) => {
   } catch (error) {
     console.error("Error:", error);
     ctx.response.status = 500;
-    ctx.response.body = { 
-      error: "Internal server error", 
-      message: error.message 
+    ctx.response.body = {
+      error: "Internal server error",
+      message: error.message
     };
   }
 });
 
-// 流式生成端点
+// 流式生成端点 (旧接口，保持不变)
 router.post("/api/generate-stream", async (ctx) => {
   try {
     const body = await ctx.request.body({ type: "json" }).value;
@@ -160,25 +256,25 @@ router.post("/api/generate-stream", async (ctx) => {
       return;
     }
 
-    if (!GOOGLE_AI_API_KEY) {
+    if (!API_KEY) {
       ctx.response.status = 500;
       ctx.response.body = { error: "API key not configured" };
       return;
     }
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:streamGenerateContent`,
-      {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json",
-          "x-goog-api-key": GOOGLE_AI_API_KEY,
-        },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature }
-        }),
-      }
+        `${GOOGLE_AI_BASE_ENDPOINT}${MODEL_NAME}:streamGenerateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": API_KEY,
+          },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature }
+          }),
+        }
     );
 
     if (!response.ok) {
@@ -210,95 +306,40 @@ router.post("/api/generate-stream", async (ctx) => {
       async start(controller) {
         try {
           let buffer = '';
-          let bracketDepth = 0;
-          let inString = false;
-          let escapeNext = false;
-          
+
           while (true) {
             const { done, value } = await reader.read();
             if (done) {
-              // 处理剩余的缓冲区
-              if (buffer.trim() && buffer.trim() !== ']') {
-                console.log("Remaining buffer:", buffer);
-              }
               controller.enqueue(encoder.encode("data: [DONE]\n\n"));
               break;
             }
-            
-            // 解码新的数据块
+
             const chunk = decoder.decode(value, { stream: true });
             buffer += chunk;
-            
-            // Google 返回的是流式 JSON 数组: [{...},{...},...]
-            // 我们需要解析出每个完整的 JSON 对象
-            
-            while (buffer.length > 0) {
-              let objectStart = -1;
-              let objectEnd = -1;
-              bracketDepth = 0;
-              inString = false;
-              escapeNext = false;
-              
-              for (let i = 0; i < buffer.length; i++) {
-                const char = buffer[i];
-                
-                if (escapeNext) {
-                  escapeNext = false;
-                  continue;
-                }
-                
-                if (char === '\\' && inString) {
-                  escapeNext = true;
-                  continue;
-                }
-                
-                if (char === '"') {
-                  inString = !inString;
-                  continue;
-                }
-                
-                if (!inString) {
-                  if (char === '{') {
-                    if (bracketDepth === 0) {
-                      objectStart = i;
-                    }
-                    bracketDepth++;
-                  } else if (char === '}') {
-                    bracketDepth--;
-                    if (bracketDepth === 0 && objectStart >= 0) {
-                      objectEnd = i + 1;
-                      break;
-                    }
-                  } else if (char === '[' && bracketDepth === 0) {
-                    // 跳过数组开头的 [
-                    continue;
-                  }
-                }
-              }
-              
-              if (objectStart >= 0 && objectEnd > objectStart) {
-                // 找到了一个完整的 JSON 对象
-                const jsonStr = buffer.substring(objectStart, objectEnd);
-                
+
+            // Google API 流返回的是一个 JSON 数组，用 \r\n 或 \n 分隔
+            // [ {...}, {...} ]
+            // 我们需要逐个解析
+            let boundary = buffer.indexOf('\n');
+            while (boundary !== -1) {
+              const line = buffer.substring(0, boundary).trim();
+              buffer = buffer.substring(boundary + 1);
+
+              if (line.startsWith('[') || line.startsWith(']')) {
+                // 忽略数组的开始和结束
+              } else if (line.endsWith(',')) {
+                const jsonStr = line.slice(0, -1);
                 try {
                   const parsed = JSON.parse(jsonStr);
-                  // 发送为 SSE 格式
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify(parsed)}\n\n`));
-                  
-                  // 从缓冲区中移除已处理的部分
-                  buffer = buffer.substring(objectEnd);
-                  
-                  // 跳过逗号和空白
-                  buffer = buffer.replace(/^[\s,]+/, '');
-                } catch (e) {
-                  console.error("JSON parse error:", e, "String:", jsonStr);
-                  // 解析失败，跳过这个字符，继续尝试
-                  buffer = buffer.substring(1);
-                }
-              } else {
-                // 没有找到完整的对象，等待更多数据
-                break;
+                } catch(e) { /* 忽略解析错误 */ }
+              } else if (line) {
+                try {
+                  const parsed = JSON.parse(line);
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify(parsed)}\n\n`));
+                } catch(e) { /* 忽略解析错误 */ }
               }
+              boundary = buffer.indexOf('\n');
             }
           }
         } catch (error) {
@@ -325,41 +366,16 @@ app.use(oakCors());
 
 // 静态文件服务 - 在路由之前
 app.use(async (ctx, next) => {
-  const path = ctx.request.url.pathname;
-  
-  // 如果是根路径，返回 index.html
-  if (path === '/') {
-    try {
-      const html = await Deno.readTextFile('./index.html');
-      ctx.response.type = 'text/html';
-      ctx.response.body = html;
-      return;
-    } catch (error) {
-      // 如果 index.html 不存在，继续到 API 路由
-      await next();
-      return;
-    }
+  try {
+    // 尝试发送文件，如果文件不存在，Deno.send 会抛出错误
+    await Deno.send(ctx, ctx.request.url.pathname, {
+      root: `${Deno.cwd()}/`, // 假设静态文件在项目根目录
+      index: "index.html",
+    });
+  } catch {
+    // 如果 Deno.send 找不到文件 (例如 /api/... 的请求)，则继续到下一个中间件 (路由)
+    await next();
   }
-  
-  // 处理其他静态文件请求
-  if (path.endsWith('.html') || path.endsWith('.js') || path.endsWith('.css')) {
-    try {
-      const file = await Deno.readTextFile('.' + path);
-      if (path.endsWith('.html')) {
-        ctx.response.type = 'text/html';
-      } else if (path.endsWith('.js')) {
-        ctx.response.type = 'application/javascript';
-      } else if (path.endsWith('.css')) {
-        ctx.response.type = 'text/css';
-      }
-      ctx.response.body = file;
-      return;
-    } catch (error) {
-      // 文件不存在，继续到下一个中间件
-    }
-  }
-  
-  await next();
 });
 
 app.use(router.routes());
@@ -375,9 +391,7 @@ const serverIp = getServerIpAddress();
 const serverUrl = serverIp ? `http://${serverIp}:${PORT}` : `http://localhost:${PORT}`;
 
 console.log(`🚀 Server running on ${serverUrl}`);
-console.log(`📝 API Key configured: ${GOOGLE_AI_API_KEY ? "Yes" : "No"}`);
-
-// 使用 await 确保 fetch 请求完成
-
+console.log(`📝 API Key configured: ${API_KEY ? "Yes" : "No"}`);
+console.log(`🎨 Nexus endpoint ready at POST ${serverUrl}/api/nexus-generate`);
 
 await app.listen({ port: PORT });
