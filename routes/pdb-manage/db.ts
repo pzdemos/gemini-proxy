@@ -1,6 +1,7 @@
+// deno-lint-ignore-file
 // routes/db.ts - 数据库查询路由
 import { Router, type Context } from "https://deno.land/x/oak@v12.6.1/mod.ts";
-import { query, queryOne } from "../utils/db.ts";
+import { query, queryOne } from "../../utils/db.ts";
 
 // 创建数据库路由
 export const dbRouter = new Router();

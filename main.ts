@@ -2,7 +2,7 @@
 import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { oakCors } from "https://deno.land/x/cors@v1.2.2/mod.ts";
 import { apiRouter } from "./routes/api.ts";
-import { dbRouter } from "./routes/db.ts";
+import { dbRouter } from "./routes/pdb-manage/db.ts";
 import { initDatabase, closeDatabase } from "./utils/db.ts";
 
 // 配置
