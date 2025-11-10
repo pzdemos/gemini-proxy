@@ -1,5 +1,3 @@
-// Fix: Add Deno type reference to resolve "Cannot find name 'Deno'" errors.
-/// <reference types="https://deno.land/x/deno/cli/types/dts/index.d.ts" />
 // main.ts - Deno Google AI API 服务器
 import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { oakCors } from "https://deno.land/x/cors@v1.2.2/mod.ts";
@@ -11,35 +9,20 @@ const API_KEY = Deno.env.get("API_KEY") || "";
 const PORT = Number(Deno.env.get("PORT")) || 8000;
 
 // Google AI API 配置
-// Fix: Update deprecated model name to a recommended one.
-const MODEL_NAME = "gemini-2.5-flash"; // 保留用于旧接口
+const MODEL_NAME = "gemini-2.5-flash"; 
 const CHAT_MODEL = "gemini-2.5-flash";
 const IMAGE_MODEL = "gemini-2.5-flash-image";
 const GOOGLE_AI_BASE_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/";
 
-// 获取服务器 IP 地址的函数
-function getServerIpAddress(): string | undefined {
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name] || []) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
-      }
-    }
-  }
-  return undefined;
-}
-
 // 路由
 const router = new Router();
 
+
 // 健康检查端点 - 改为 /api/health
-router.get("/api/health", (ctx) => {
+router.get("/", (ctx) => {
   ctx.response.body = {
     status: "ok",
     message: "Google AI API Service is running",
-    model: MODEL_NAME,
-    timestamp: new Date().toISOString(),
   };
 });
 
@@ -86,7 +69,7 @@ router.get("/api/models", async (ctx) => {
   } catch (error) {
     console.error("Error:", error);
     ctx.response.status = 500;
-    ctx.response.body = { error: "Internal server error", message: error.message };
+    ctx.response.body = { error: "Internal server error", message: error instanceof Error ? error.message : String(error) };
   }
 });
 
@@ -174,7 +157,7 @@ router.post("/api/nexus-generate", async (ctx) => {
     ctx.response.status = 500;
     ctx.response.body = {
       error: "Internal server error",
-      message: error.message
+      message: error instanceof Error ? error.message : String(error)
     };
   }
 });
@@ -239,7 +222,7 @@ router.post("/api/generate", async (ctx) => {
     ctx.response.status = 500;
     ctx.response.body = {
       error: "Internal server error",
-      message: error.message
+      message: error instanceof Error ? error.message : String(error)
     };
   }
 });
@@ -344,7 +327,7 @@ router.post("/api/generate-stream", async (ctx) => {
           }
         } catch (error) {
           console.error("Stream processing error:", error);
-          controller.enqueue(encoder.encode(`data: {"error": "${error.message}"}\n\n`));
+          controller.enqueue(encoder.encode(`data: {"error": "${error instanceof Error ? error.message : String(error)}"}\n\n`));
         } finally {
           controller.close();
           reader.releaseLock();
@@ -354,7 +337,7 @@ router.post("/api/generate-stream", async (ctx) => {
   } catch (error) {
     console.error("Stream Error:", error);
     ctx.response.status = 500;
-    ctx.response.body = { error: error.message };
+    ctx.response.body = { error: error instanceof Error ? error.message : String(error) };
   }
 });
 
@@ -363,20 +346,6 @@ const app = new Application();
 
 // 中间件
 app.use(oakCors());
-
-// 静态文件服务 - 在路由之前
-app.use(async (ctx, next) => {
-  try {
-    // 尝试发送文件，如果文件不存在，Deno.send 会抛出错误
-    await Deno.send(ctx, ctx.request.url.pathname, {
-      root: `${Deno.cwd()}/`, // 假设静态文件在项目根目录
-      index: "index.html",
-    });
-  } catch {
-    // 如果 Deno.send 找不到文件 (例如 /api/... 的请求)，则继续到下一个中间件 (路由)
-    await next();
-  }
-});
 
 app.use(router.routes());
 app.use(router.allowedMethods());
@@ -387,11 +356,8 @@ app.addEventListener("error", (evt) => {
 });
 
 // 启动服务器
-const serverIp = getServerIpAddress();
-const serverUrl = serverIp ? `http://${serverIp}:${PORT}` : `http://localhost:${PORT}`;
 
-console.log(`🚀 Server running on ${serverUrl}`);
+console.log(`🚀 Server running on http://localhost:${PORT}`);
 console.log(`📝 API Key configured: ${API_KEY ? "Yes" : "No"}`);
-console.log(`🎨 Nexus endpoint ready at POST ${serverUrl}/api/nexus-generate`);
 
 await app.listen({ port: PORT });
