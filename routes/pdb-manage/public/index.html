@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据库管理面板</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading { border: 3px solid #f3f4f6; border-top: 3px solid #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        .table-container { overflow-x: auto; max-height: 500px; }
+        table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
+        th { position: sticky; top: 0; background: #f8fafc; z-index: 10; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+        const API = '/db';
+
+        function App() {
+            const [tab, setTab] = useState('overview');
+            const [health, setHealth] = useState(false);
+            const [stats, setStats] = useState({});
+            const [tables, setTables] = useState([]);
+            const [table, setTable] = useState(null);
+            const [view, setView] = useState('structure');
+            const [structure, setStructure] = useState([]);
+            const [data, setData] = useState({ data: [], pagination: {} });
+            const [page, setPage] = useState(1);
+            const [sql, setSql] = useState('');
+            const [result, setResult] = useState(null);
+            const [info, setInfo] = useState({});
+
+            useEffect(() => {
+                const check = async () => {
+                    try {
+                        const r = await fetch(`${API}/health`);
+                        const d = await r.json();
+                        setHealth(d.success);
+                    } catch { setHealth(false); }
+                };
+                const load = async () => {
+                    try {
+                        const r = await fetch(`${API}/stats`);
+                        const d = await r.json();
+                        if (d.success) setStats(d.data);
+                    } catch (e) { console.error(e); }
+                };
+                check(); load();
+                const i = setInterval(check, 30000);
+                return () => clearInterval(i);
+            }, []);
+
+            useEffect(() => {
+                if (tab === 'tables') loadTables();
+                if (tab === 'info') loadInfo();
+            }, [tab]);
+
+            useEffect(() => {
+                if (table) {
+                    view === 'structure' ? loadStructure() : loadData();
+                }
+            }, [table, view, page]);
+
+            const loadTables = async () => {
+                try {
+                    const r = await fetch(`${API}/tables`);
+                    const d = await r.json();
+                    if (d.success) setTables(d.data);
+                } catch (e) { console.error(e); }
+            };
+
+            const loadStructure = async () => {
+                try {
+                    const r = await fetch(`${API}/tables/${table}/structure`);
+                    const d = await r.json();
+                    if (d.success) setStructure(d.data);
+                } catch (e) { console.error(e); }
+            };
+
+            const loadData = async () => {
+                try {
+                    const r = await fetch(`${API}/tables/${table}/data?page=${page}&limit=20`);
+                    const d = await r.json();
+                    if (d.success) setData(d);
+                } catch (e) { console.error(e); }
+            };
+
+            const execQuery = async () => {
+                if (!sql.trim()) return alert('请输入SQL');
+                try {
+                    const r = await fetch(`${API}/query`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ sql })
+                    });
+                    const d = await r.json();
+                    setResult(d);
+                } catch (e) { setResult({ success: false, error: e.message }); }
+            };
+
+            const loadInfo = async () => {
+                try {
+                    const r = await fetch(`${API}/info`);
+                    const d = await r.json();
+                    if (d.success) setInfo(d.data);
+                } catch (e) { console.error(e); }
+            };
+
+            const fmt = (v) => v === null ? 'NULL' : String(v).length > 100 ? String(v).substring(0, 100) + '...' : String(v);
+
+            return (
+                <div className="bg-gray-50 min-h-screen">
+                    <header className="bg-white shadow-sm border-b">
+                        <div className="max-w-7xl mx-auto px-4 py-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
+                                    </svg>
+                                    <h1 className="text-2xl font-bold">数据库管理面板</h1>
+                                </div>
+                                <div className="flex items-center text-sm">
+                                    <span className={`w-2 h-2 rounded-full mr-2 ${health ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                                    <span className={health ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                                        {health ? '连接正常' : '连接失败'}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <main className="max-w-7xl mx-auto px-4 py-8">
+                        <div className="bg-white rounded-lg shadow-sm mb-6">
+                            <nav className="flex border-b">
+                                {['overview', 'tables', 'query', 'info'].map(t => (
+                                    <button key={t} onClick={() => setTab(t)} className={`px-6 py-3 font-medium ${tab === t ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}>
+                                        {t === 'overview' ? '概览' : t === 'tables' ? '表管理' : t === 'query' ? '查询执行' : '数据库信息'}
+                                    </button>
+                                ))}
+                            </nav>
+                        </div>
+
+                        {tab === 'overview' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                {[
+                                    { l: '表数量', v: stats.tables, c: 'blue' },
+                                    { l: '索引数量', v: stats.indexes, c: 'green' },
+                                    { l: '数据库大小', v: stats.databaseSize, c: 'purple' },
+                                    { l: '活跃连接', v: stats.activeConnections, c: 'orange' }
+                                ].map((s, i) => (
+                                    <div key={i} className="bg-white rounded-lg shadow-sm p-6">
+                                        <p className="text-sm font-medium text-gray-600">{s.l}</p>
+                                        <p className="text-3xl font-bold mt-2">{s.v || '-'}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {tab === 'tables' && (
+                            <div className="space-y-6">
+                                <div className="bg-white rounded-lg shadow-sm p-6">
+                                    <div className="flex justify-between mb-4">
+                                        <h2 className="text-lg font-semibold">数据表列表</h2>
+                                        <button onClick={loadTables} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">刷新</button>
+                                    </div>
+                                    <div className="space-y-2">
+                                        {tables.map(t => (
+                                            <div key={t.table_name} onClick={() => { setTable(t.table_name); setPage(1); }} className="flex justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
+                                                <div>
+                                                    <p className="font-medium">{t.table_name}</p>
+                                                    <p className="text-sm text-gray-500">Schema: {t.table_schema}</p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {table && (
+                                    <div className="bg-white rounded-lg shadow-sm p-6">
+                                        <h3 className="text-lg font-semibold mb-4">表详情: <span className="text-blue-600">{table}</span></h3>
+                                        <div className="mb-4">
+                                            <button onClick={() => setView('structure')} className={`px-4 py-2 rounded-lg mr-2 ${view === 'structure' ? 'bg-gray-100' : 'text-gray-600'}`}>表结构</button>
+                                            <button onClick={() => setView('data')} className={`px-4 py-2 rounded-lg ${view === 'data' ? 'bg-gray-100' : 'text-gray-600'}`}>表数据</button>
+                                        </div>
+
+                                        {view === 'structure' ? (
+                                            <div className="table-container">
+                                                <table className="w-full">
+                                                    <thead>
+                                                        <tr className="border-b">
+                                                            <th className="px-4 py-3 text-left text-xs uppercase">列名</th>
+                                                            <th className="px-4 py-3 text-left text-xs uppercase">数据类型</th>
+                                                            <th className="px-4 py-3 text-left text-xs uppercase">可空</th>
+                                                            <th className="px-4 py-3 text-left text-xs uppercase">默认值</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        {structure.map((c, i) => (
+                                                            <tr key={i} className="border-b hover:bg-gray-50">
+                                                                <td className="px-4 py-3 font-medium">{c.column_name}</td>
+                                                                <td className="px-4 py-3">{c.data_type}</td>
+                                                                <td className="px-4 py-3">
+                                                                    <span className={`px-2 py-1 text-xs rounded-full ${c.is_nullable === 'YES' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                                        {c.is_nullable === 'YES' ? '是' : '否'}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3">{c.column_default || '-'}</td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        ) : data.data.length > 0 ? (
+                                            <div>
+                                                <div className="table-container mb-4">
+                                                    <table className="w-full">
+                                                        <thead>
+                                                            <tr className="border-b">
+                                                                {Object.keys(data.data[0]).map(k => <th key={k} className="px-4 py-3 text-left text-xs uppercase whitespace-nowrap">{k}</th>)}
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {data.data.map((r, i) => (
+                                                                <tr key={i} className="border-b hover:bg-gray-50">
+                                                                    {Object.values(r).map((v, j) => <td key={j} className="px-4 py-3 whitespace-nowrap">{fmt(v)}</td>)}
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                                <div className="flex justify-between items-center pt-4 border-t">
+                                                    <div className="text-sm">显示 {(page - 1) * 20 + 1} - {Math.min(page * 20, data.pagination.total)} / 共 {data.pagination.total} 条</div>
+                                                    <div className="flex space-x-2">
+                                                        <button onClick={() => setPage(page - 1)} disabled={page === 1} className="px-3 py-1 border rounded disabled:opacity-50">上一页</button>
+                                                        <span className="px-3 py-1 text-sm">第 {page} / {data.pagination.totalPages} 页</span>
+                                                        <button onClick={() => setPage(page + 1)} disabled={page >= data.pagination.totalPages} className="px-3 py-1 border rounded disabled:opacity-50">下一页</button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : <p className="text-center text-gray-500 py-8">没有数据</p>}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {tab === 'query' && (
+                            <div className="space-y-6">
+                                <div className="bg-white rounded-lg shadow-sm p-6">
+                                    <h2 className="text-lg font-semibold mb-4">SQL 查询执行器</h2>
+                                    <p className="text-sm text-gray-600 mb-4">仅支持 SELECT 查询语句</p>
+                                    <textarea value={sql} onChange={e => setSql(e.target.value)} rows="6" className="w-full px-4 py-3 border rounded-lg font-mono text-sm" placeholder="输入 SQL 查询语句...&#10;例如: SELECT * FROM users LIMIT 10"></textarea>
+                                    <div className="flex space-x-4 mt-4">
+                                        <button onClick={execQuery} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">执行查询</button>
+                                        <button onClick={() => { setSql(''); setResult(null); }} className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">清空</button>
+                                    </div>
+                                </div>
+
+                                {result && (
+                                    <div className="bg-white rounded-lg shadow-sm p-6">
+                                        <h3 className="text-lg font-semibold mb-4">查询结果</h3>
+                                        {result.success ? result.data.length > 0 ? (
+                                            <div>
+                                                <div className="text-sm text-gray-600 mb-2">返回 {result.count} 条记录</div>
+                                                <div className="table-container">
+                                                    <table className="w-full">
+                                                        <thead>
+                                                            <tr className="border-b">{Object.keys(result.data[0]).map(k => <th key={k} className="px-4 py-3 text-left text-xs uppercase whitespace-nowrap">{k}</th>)}</tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {result.data.map((r, i) => (
+                                                                <tr key={i} className="border-b hover:bg-gray-50">
+                                                                    {Object.values(r).map((v, j) => <td key={j} className="px-4 py-3 whitespace-nowrap">{fmt(v)}</td>)}
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            </div>
+                                        ) : <p className="text-center text-gray-500 py-8">查询成功，但没有返回数据</p> : (
+                                            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                                <p className="text-red-800 font-medium">查询失败</p>
+                                                <p className="text-red-600 text-sm mt-1">{result.message || result.error}</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {tab === 'info' && (
+                            <div className="bg-white rounded-lg shadow-sm p-6">
+                                <div className="flex justify-between mb-4">
+                                    <h2 className="text-lg font-semibold">数据库详细信息</h2>
+                                    <button onClick={loadInfo} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">刷新</button>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {[
+                                        { l: '数据库名称', v: info.database },
+                                        { l: '数据库大小', v: info.size },
+                                        { l: '活跃连接数', v: info.connections }
+                                    ].map((x, i) => (
+                                        <div key={i} className="border rounded-lg p-4">
+                                            <p className="text-sm font-medium text-gray-500 mb-1">{x.l}</p>
+                                            <p className="text-lg font-semibold">{x.v || '-'}</p>
+                                        </div>
+                                    ))}
+                                    <div className="border rounded-lg p-4 md:col-span-2">
+                                        <p className="text-sm font-medium text-gray-500 mb-1">数据库版本</p>
+                                        <p className="text-sm text-gray-700 font-mono">{info.version || '-'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

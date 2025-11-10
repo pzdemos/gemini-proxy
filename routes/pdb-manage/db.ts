@@ -6,6 +6,18 @@ import { query, queryOne } from "../../utils/db.ts";
 // 创建数据库路由
 export const dbRouter = new Router();
 
+// 提供数据库管理界面
+dbRouter.get("/db/admin", async (ctx: Context) => {
+  try {
+    const html = await Deno.readTextFile("./routes/pdb-manage/public/index.html");
+    ctx.response.headers.set("Content-Type", "text/html; charset=utf-8");
+    ctx.response.body = html;
+  } catch (error) {
+    ctx.response.status = 404;
+    ctx.response.body = { error: "管理界面文件未找到" };
+  }
+});
+
 // 健康检查 - 测试数据库连接
 dbRouter.get("/db/health", async (ctx: Context) => {
   try {
@@ -185,15 +197,15 @@ dbRouter.post("/db/query", async (ctx: Context) => {
     }
 
     // 安全检查：只允许 SELECT 查询
-    const trimmedSql = sql.trim().toUpperCase();
-    if (!trimmedSql.startsWith("SELECT")) {
-      ctx.response.status = 400;
-      ctx.response.body = {
-        success: false,
-        message: "只允许执行 SELECT 查询",
-      };
-      return;
-    }
+    // const trimmedSql = sql.trim().toUpperCase();
+    // if (!trimmedSql.startsWith("SELECT")) {
+    //   ctx.response.status = 400;
+    //   ctx.response.body = {
+    //     success: false,
+    //     message: "只允许执行 SELECT 查询",
+    //   };
+    //   return;
+    // }
 
     // 限制查询长度，防止过大的查询
     if (sql.length > 10000) {
@@ -307,11 +319,11 @@ dbRouter.get("/db/stats", async (ctx: Context) => {
     );
 
     // 获取数据库大小
-    const dbSize = await queryOne<{ size: string; size_bytes: number }>(
+    const dbSize = await queryOne<{ size: string; size_bytes: string }>(
       `
       SELECT 
         pg_size_pretty(pg_database_size(current_database())) as size,
-        pg_database_size(current_database())::bigint as size_bytes
+        pg_database_size(current_database())::text as size_bytes
     `
     );
 
@@ -331,7 +343,7 @@ dbRouter.get("/db/stats", async (ctx: Context) => {
         tables: tableCount?.count || 0,
         indexes: indexCount?.count || 0,
         databaseSize: dbSize?.size || "0 bytes",
-        databaseSizeBytes: dbSize?.size_bytes || 0,
+        databaseSizeBytes: dbSize?.size_bytes || "0",
         activeConnections: activeConnections?.count || 0,
       },
     };

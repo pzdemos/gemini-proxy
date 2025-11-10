@@ -25,7 +25,7 @@ export async function initDatabase(): Promise<Pool> {
       port: number;
       user: string;
       password: string;
-      tls?: { enabled: boolean };
+      tls?: { enabled: boolean; enforce?: boolean; caCertificates?: string[] };
     } = {
       database: config.database,
       hostname: config.hostname,
@@ -34,9 +34,13 @@ export async function initDatabase(): Promise<Pool> {
       password: config.password,
     };
 
-    // 如果启用 SSL，添加 TLS 配置
+    // 如果启用 SSL，添加 TLS 配置（禁用严格验证以避免 close_notify 问题）
     if (config.ssl) {
-      poolOptions.tls = { enabled: true };
+      poolOptions.tls = { 
+        enabled: true,
+        enforce: false,
+        caCertificates: []
+      };
     }
     
     pool = new Pool(poolOptions, config.max || 10, true);
