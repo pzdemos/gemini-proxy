@@ -122,7 +122,7 @@ apiRouter.post("/api/nexus-generate", async (ctx: Context) => {
       model = CHAT_MODEL;
     }
 
-    const endpointUrl = `${GOOGLE_AI_BASE_ENDPOINT}${model}:generateContent`;
+    const endpointUrl = `${GOOGLE_AI_BASE_ENDPOINT}${model.replace('models/', '')}:generateContent`;
 
     const apiResponse = await fetch(endpointUrl, {
       method: "POST",
@@ -177,7 +177,7 @@ apiRouter.post("/api/generate", async (ctx: Context) => {
       return;
     }
 
-    const response = await fetch(`${GOOGLE_AI_BASE_ENDPOINT}${MODEL_NAME}:generateContent`, {
+    const response = await fetch(`${GOOGLE_AI_BASE_ENDPOINT}${MODEL_NAME.replace('models/', '')}:generateContent`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -223,6 +223,176 @@ apiRouter.post("/api/generate", async (ctx: Context) => {
   }
 });
 
+// AI SQL生成端点
+apiRouter.post("/api/sql-generate", async (ctx: Context) => {
+  try {
+    const body = await ctx.request.body({ type: "json" }).value;
+    const { prompt, schema, model, maxTokens = 2048, temperature = 0.7 } = body;
+
+    if (!prompt) {
+      ctx.response.status = 400;
+      ctx.response.body = { error: "提示语不能为空" };
+      return;
+    }
+
+    if (!API_KEY) {
+      ctx.response.status = 500;
+      ctx.response.body = { error: "API key not configured" };
+      return;
+    }
+
+    // 构建SQL生成的提示词
+    let systemPrompt = "你是一个专业的POSTGRESQL查询生成专家。请根据用户的需求生成高质量的SQL语句。";
+    if (schema) {
+      systemPrompt += `\n\n数据库结构信息：\n${schema}`;
+    }
+    systemPrompt += "\n\n请生成准确的SQL查询语句，确保语法正确。如果需要更多信息才能生成准确的查询，请说明。";
+
+    const fullPrompt = `${systemPrompt}\n\n用户需求：${prompt}\n\n请生成对应的SQL语句（只需要返回SQL代码，不需要额外解释）：`;
+
+    const response = await fetch(`${GOOGLE_AI_BASE_ENDPOINT}${(model || MODEL_NAME).replace('models/', '')}:generateContent`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": API_KEY,
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: fullPrompt }]
+        }],
+        generationConfig: {
+          temperature: temperature,
+          maxOutputTokens: maxTokens,
+        }
+      }),
+    });
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Google AI API Error (SQL生成):", error);
+      console.error("请求URL:", `${GOOGLE_AI_BASE_ENDPOINT}${(model || MODEL_NAME).replace('models/', '')}:generateContent`);
+      console.error("请求payload:", JSON.stringify({
+        contents: [{
+          parts: [{ text: fullPrompt }]
+        }],
+        generationConfig: {
+          temperature: temperature,
+          maxOutputTokens: maxTokens,
+        }
+      }, null, 2));
+      ctx.response.status = response.status;
+      ctx.response.body = { error: "生成SQL失败", details: error };
+      return;
+    }
+
+    const data = await response.json();
+    const generatedSQL = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+
+    ctx.response.body = {
+      success: true,
+      sql: generatedSQL,
+      usage: {
+        promptTokens: data.usageMetadata?.promptTokenCount || 0,
+        completionTokens: data.usageMetadata?.candidatesTokenCount || 0,
+        totalTokens: data.usageMetadata?.totalTokenCount || 0,
+      }
+    };
+  } catch (error) {
+    console.error("SQL生成错误详情:", error);
+    console.error("错误堆栈:", error instanceof Error ? error.stack : "无堆栈信息");
+    ctx.response.status = 500;
+    ctx.response.body = {
+      error: "生成SQL时发生错误", 
+      message: error instanceof Error ? error.message : String(error),
+      details: error instanceof Error ? error.stack : "无详细错误信息"
+    };
+  }
+});
+
+// AI SQL语法检查端点
+apiRouter.post("/api/sql-validate", async (ctx: Context) => {
+  try {
+    const body = await ctx.request.body({ type: "json" }).value;
+    const { sql, model, maxTokens = 1024, temperature = 0.3 } = body;
+
+    if (!sql) {
+      ctx.response.status = 400;
+      ctx.response.body = { error: "SQL语句不能为空" };
+      return;
+    }
+
+    if (!API_KEY) {
+      ctx.response.status = 500;
+      ctx.response.body = { error: "API key not configured" };
+      return;
+    }
+
+    const validationPrompt = `请检查以下SQL语句的语法是否正确，并提供建议：
+
+SQL语句：
+${sql}
+
+请按以下格式回复：
+1. 语法是否正确：正确/错误
+2. 如果有错误，请指出具体的错误原因和修正建议
+3. 提供修正后的SQL语句（如果有）
+4. 性能优化建议（如果有）`;
+
+    const response = await fetch(`${GOOGLE_AI_BASE_ENDPOINT}${(model || MODEL_NAME).replace('models/', '')}:generateContent`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": API_KEY,
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{ text: validationPrompt }]
+        }],
+        generationConfig: {
+          temperature: temperature,
+          maxOutputTokens: maxTokens,
+        }
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Google AI API Error:", error);
+      ctx.response.status = response.status;
+      ctx.response.body = { error: "语法检查失败", details: error };
+      return;
+    }
+
+    const data = await response.json();
+    const validationResult = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+
+    // 简单解析验证结果
+    const isCorrect = validationResult.toLowerCase().includes("正确") && 
+                     !validationResult.toLowerCase().includes("错误");
+    
+    const hasErrors = validationResult.toLowerCase().includes("错误") || 
+                     validationResult.toLowerCase().includes("syntax");
+
+    ctx.response.body = {
+      success: true,
+      isCorrect: isCorrect,
+      hasErrors: hasErrors,
+      validationResult: validationResult,
+      usage: {
+        promptTokens: data.usageMetadata?.promptTokenCount || 0,
+        completionTokens: data.usageMetadata?.candidatesTokenCount || 0,
+        totalTokens: data.usageMetadata?.totalTokenCount || 0,
+      }
+    };
+  } catch (error) {
+    console.error("Error:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      error: "语法检查时发生错误",
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+});
+
 // 流式生成端点 (旧接口，保持不变)
 apiRouter.post("/api/generate-stream", async (ctx: Context) => {
   try {
@@ -242,7 +412,7 @@ apiRouter.post("/api/generate-stream", async (ctx: Context) => {
     }
 
     const response = await fetch(
-        `${GOOGLE_AI_BASE_ENDPOINT}${MODEL_NAME}:streamGenerateContent`,
+        `${GOOGLE_AI_BASE_ENDPOINT}${MODEL_NAME.replace('models/', '')}:streamGenerateContent`,
         {
           method: "POST",
           headers: {

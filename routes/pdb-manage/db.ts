@@ -21,18 +21,33 @@ dbRouter.get("/db/admin", async (ctx: Context) => {
 // 健康检查 - 测试数据库连接
 dbRouter.get("/db/health", async (ctx: Context) => {
   try {
+    // 检查数据库是否启用
+    const ENABLE_DB = Deno.env.get("ENABLE_DB") === "true";
+    
+    if (!ENABLE_DB) {
+      ctx.response.body = {
+        success: false,
+        message: "数据库功能未启用",
+        error: "ENABLE_DB 环境变量未设置为 true",
+        enabled: false,
+      };
+      return;
+    }
+    
     const result = await queryOne<{ now: Date }>("SELECT NOW() as now");
     if (result) {
       ctx.response.body = {
         success: true,
         message: "数据库连接正常",
         timestamp: result.now,
+        enabled: true,
       };
     } else {
       ctx.response.status = 500;
       ctx.response.body = {
         success: false,
         message: "数据库连接异常",
+        enabled: true,
       };
     }
   } catch (error) {
@@ -42,6 +57,7 @@ dbRouter.get("/db/health", async (ctx: Context) => {
       success: false,
       message: "数据库连接失败",
       error: error instanceof Error ? error.message : String(error),
+      enabled: true,
     };
   }
 });
@@ -49,6 +65,19 @@ dbRouter.get("/db/health", async (ctx: Context) => {
 // 获取数据库信息
 dbRouter.get("/db/info", async (ctx: Context) => {
   try {
+    // 检查数据库是否启用
+    const ENABLE_DB = Deno.env.get("ENABLE_DB") === "true";
+    
+    if (!ENABLE_DB) {
+      ctx.response.body = {
+        success: false,
+        message: "数据库功能未启用",
+        error: "请在环境变量中设置 ENABLE_DB=true 来启用数据库功能",
+        enabled: false,
+      };
+      return;
+    }
+
     // 获取数据库版本
     const version = await queryOne<{ version: string }>(
       "SELECT version() as version"
@@ -77,6 +106,7 @@ dbRouter.get("/db/info", async (ctx: Context) => {
         size: dbSize?.size,
         connections: connections?.count,
       },
+      enabled: true,
     };
   } catch (error) {
     console.error("获取数据库信息失败:", error);
@@ -85,6 +115,7 @@ dbRouter.get("/db/info", async (ctx: Context) => {
       success: false,
       message: "获取数据库信息失败",
       error: error instanceof Error ? error.message : String(error),
+      enabled: true,
     };
   }
 });
@@ -92,6 +123,21 @@ dbRouter.get("/db/info", async (ctx: Context) => {
 // 获取所有表列表
 dbRouter.get("/db/tables", async (ctx: Context) => {
   try {
+    // 检查数据库是否启用
+    const ENABLE_DB = Deno.env.get("ENABLE_DB") === "true";
+    
+    if (!ENABLE_DB) {
+      ctx.response.body = {
+        success: false,
+        message: "数据库功能未启用",
+        error: "请在环境变量中设置 ENABLE_DB=true 来启用数据库功能",
+        data: [],
+        count: 0,
+        enabled: false,
+      };
+      return;
+    }
+
     const tables = await query<{
       table_name: string;
       table_schema: string;
@@ -108,6 +154,7 @@ dbRouter.get("/db/tables", async (ctx: Context) => {
       success: true,
       data: tables,
       count: tables.length,
+      enabled: true,
     };
   } catch (error) {
     console.error("获取表列表失败:", error);
@@ -116,6 +163,7 @@ dbRouter.get("/db/tables", async (ctx: Context) => {
       success: false,
       message: "获取表列表失败",
       error: error instanceof Error ? error.message : String(error),
+      enabled: true,
     };
   }
 });
@@ -184,6 +232,20 @@ dbRouter.get("/db/tables/:tableName/structure", async (ctx: Context) => {
 // 执行自定义查询（只读，用于安全考虑只允许 SELECT）
 dbRouter.post("/db/query", async (ctx: Context) => {
   try {
+    // 检查数据库是否启用
+    const ENABLE_DB = Deno.env.get("ENABLE_DB") === "true";
+    
+    if (!ENABLE_DB) {
+      ctx.response.status = 503;
+      ctx.response.body = {
+        success: false,
+        message: "数据库功能未启用",
+        error: "请在环境变量中设置 ENABLE_DB=true 来启用数据库功能",
+        enabled: false,
+      };
+      return;
+    }
+
     const body = await ctx.request.body({ type: "json" }).value;
     const { sql, params } = body;
 
@@ -192,6 +254,7 @@ dbRouter.post("/db/query", async (ctx: Context) => {
       ctx.response.body = {
         success: false,
         message: "SQL 查询语句不能为空",
+        enabled: true,
       };
       return;
     }
@@ -213,6 +276,7 @@ dbRouter.post("/db/query", async (ctx: Context) => {
       ctx.response.body = {
         success: false,
         message: "查询语句过长",
+        enabled: true,
       };
       return;
     }
@@ -223,6 +287,7 @@ dbRouter.post("/db/query", async (ctx: Context) => {
       success: true,
       data: results,
       count: results.length,
+      enabled: true,
     };
   } catch (error) {
     console.error("执行查询失败:", error);
@@ -231,6 +296,7 @@ dbRouter.post("/db/query", async (ctx: Context) => {
       success: false,
       message: "执行查询失败",
       error: error instanceof Error ? error.message : String(error),
+      enabled: true,
     };
   }
 });
