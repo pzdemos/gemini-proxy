@@ -3,289 +3,930 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>数据库管理面板</title>
+    <title>数据库管理中心</title>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        .loading { border: 3px solid #f3f4f6; border-top: 3px solid #3b82f6; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
-        .table-container { overflow-x: auto; max-height: 500px; }
-        table { border-collapse: collapse; width: 100%; font-size: 0.875rem; }
-        th { position: sticky; top: 0; background: #f8fafc; z-index: 10; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; max-height: 0; }
+            to { opacity: 1; max-height: 1000px; }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .slide-down {
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        /* 玻璃态效果 */
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* 表格样式 */
+        .data-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 14px;
+        }
+
+        .data-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+        }
+
+        .data-table th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid #e2e8f0;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+
+        .data-table th:hover {
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .data-table tbody tr {
+            transition: all 0.2s;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .data-table tbody tr:hover {
+            background: #f0f9ff;
+            transform: translateX(2px);
+        }
+
+        .data-table td {
+            padding: 12px 16px;
+            color: #1e293b;
+        }
+
+        /* 分页样式 */
+        .pagination {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            color: #475569;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: #f8fafc;
+            border-color: #3b82f6;
+            color: #3b82f6;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination button.active {
+            background: #3b82f6;
+            color: white;
+            border-color: #3b82f6;
+        }
+
+        /* 输入框样式 */
+        .search-input {
+            padding: 8px 12px 8px 36px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+            width: 100%;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        /* SQL编辑器 */
+        .sql-editor {
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 16px;
+            background: #1e293b;
+            color: #e2e8f0;
+            border-radius: 8px;
+            min-height: 200px;
+            resize: vertical;
+        }
+
+        /* 标签样式 */
+        .tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .tag-blue {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .tag-green {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .tag-red {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .tag-gray {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        /* 卡片样式 */
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transform: translateY(-2px);
+        }
+
+        /* 加载动画 */
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #3b82f6;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#8b5cf6',
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body>
+<body class="bg-gradient-to-br from-slate-50 via-white to-blue-50 min-h-screen">
     <div id="root"></div>
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
+        
+        // API配置
         const API = '/db';
 
+        // 自定义表格组件
+        function DataTable({ data, columns, pageSize = 20, onSort, searchable = true, className = "" }) {
+            const [currentPage, setCurrentPage] = useState(1);
+            const [searchTerm, setSearchTerm] = useState("");
+            const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
+            const [selectedRows, setSelectedRows] = useState(new Set());
+
+            // 搜索过滤
+            const filteredData = useMemo(() => {
+                if (!searchTerm) return data;
+                return data.filter(row => 
+                    Object.values(row).some(value => 
+                        String(value).toLowerCase().includes(searchTerm.toLowerCase())
+                    )
+                );
+            }, [data, searchTerm]);
+
+            // 排序
+            const sortedData = useMemo(() => {
+                if (!sortConfig.key) return filteredData;
+                const sorted = [...filteredData].sort((a, b) => {
+                    const aVal = a[sortConfig.key];
+                    const bVal = b[sortConfig.key];
+                    
+                    if (aVal === null || aVal === undefined) return 1;
+                    if (bVal === null || bVal === undefined) return -1;
+                    
+                    if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+                    if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+                    return 0;
+                });
+                return sorted;
+            }, [filteredData, sortConfig]);
+
+            // 分页
+            const paginatedData = useMemo(() => {
+                const start = (currentPage - 1) * pageSize;
+                return sortedData.slice(start, start + pageSize);
+            }, [sortedData, currentPage, pageSize]);
+
+            const totalPages = Math.ceil(sortedData.length / pageSize);
+
+            const handleSort = (key) => {
+                let direction = 'asc';
+                if (sortConfig.key === key && sortConfig.direction === 'asc') {
+                    direction = 'desc';
+                } else if (sortConfig.key === key && sortConfig.direction === 'desc') {
+                    direction = null;
+                }
+                setSortConfig({ key: direction ? key : null, direction });
+                if (onSort) onSort(key, direction);
+            };
+
+            const formatValue = (value, column) => {
+                if (column.formatter) return column.formatter(value);
+                
+                if (value === null || value === undefined) {
+                    return <span className="tag tag-gray">NULL</span>;
+                }
+                
+                if (typeof value === 'boolean') {
+                    return <span className={`tag ${value ? 'tag-green' : 'tag-red'}`}>
+                        {value ? '✓' : '✗'}
+                    </span>;
+                }
+                
+                if (typeof value === 'number') {
+                    return <span className="font-mono text-blue-600">{value}</span>;
+                }
+                
+                const str = String(value);
+                if (str.length > 100) {
+                    return (
+                        <span title={str}>
+                            {str.substring(0, 100)}...
+                        </span>
+                    );
+                }
+                
+                return str;
+            };
+
+            const exportData = (format) => {
+                let content = '';
+                const headers = columns.map(col => col.title || col.field);
+                
+                if (format === 'csv') {
+                    content = [
+                        headers.join(','),
+                        ...sortedData.map(row => 
+                            columns.map(col => {
+                                const val = row[col.field];
+                                return val === null ? '' : `"${String(val).replace(/"/g, '""')}"`;
+                            }).join(',')
+                        )
+                    ].join('\n');
+                    
+                    const blob = new Blob([content], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `export_${Date.now()}.csv`;
+                    a.click();
+                } else if (format === 'json') {
+                    content = JSON.stringify(sortedData, null, 2);
+                    const blob = new Blob([content], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `export_${Date.now()}.json`;
+                    a.click();
+                }
+            };
+
+            if (!data || data.length === 0) {
+                return (
+                    <div className="text-center py-12 text-gray-500">
+                        <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                        </svg>
+                        暂无数据
+                    </div>
+                );
+            }
+
+            return (
+                <div className={`${className}`}>
+                    {searchable && (
+                        <div className="mb-4 flex justify-between items-center">
+                            <div className="relative max-w-md flex-1">
+                                <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                </svg>
+                                <input
+                                    type="text"
+                                    className="search-input"
+                                    placeholder="搜索数据..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => exportData('csv')}
+                                    className="px-3 py-1.5 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
+                                >
+                                    导出 CSV
+                                </button>
+                                <button
+                                    onClick={() => exportData('json')}
+                                    className="px-3 py-1.5 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                                >
+                                    导出 JSON
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    <div className="overflow-auto rounded-lg border border-gray-200">
+                        <table className="data-table">
+                            <thead>
+                                <tr>
+                                    {columns.map((column, index) => (
+                                        <th
+                                            key={column.field || index}
+                                            onClick={() => handleSort(column.field)}
+                                            className={column.sortable !== false ? 'cursor-pointer' : ''}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span>{column.title || column.field}</span>
+                                                {sortConfig.key === column.field && (
+                                                    <span className="text-blue-500">
+                                                        {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {paginatedData.map((row, rowIndex) => (
+                                    <tr key={rowIndex}>
+                                        {columns.map((column, colIndex) => (
+                                            <td key={colIndex}>
+                                                {formatValue(row[column.field], column)}
+                                            </td>
+                                        ))}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {totalPages > 1 && (
+                        <div className="mt-4 flex justify-between items-center">
+                            <div className="text-sm text-gray-600">
+                                显示 {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, sortedData.length)} / 共 {sortedData.length} 条
+                            </div>
+                            <div className="pagination">
+                                <button
+                                    onClick={() => setCurrentPage(1)}
+                                    disabled={currentPage === 1}
+                                >
+                                    首页
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage(currentPage - 1)}
+                                    disabled={currentPage === 1}
+                                >
+                                    上一页
+                                </button>
+                                {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                                    const page = currentPage - 2 + i;
+                                    if (page < 1 || page > totalPages) return null;
+                                    return (
+                                        <button
+                                            key={page}
+                                            onClick={() => setCurrentPage(page)}
+                                            className={currentPage === page ? 'active' : ''}
+                                        >
+                                            {page}
+                                        </button>
+                                    );
+                                })}
+                                <button
+                                    onClick={() => setCurrentPage(currentPage + 1)}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    下一页
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage(totalPages)}
+                                    disabled={currentPage === totalPages}
+                                >
+                                    末页
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // 主应用组件
         function App() {
-            const [tab, setTab] = useState('overview');
+            const [activeTab, setActiveTab] = useState('overview');
+            const [loading, setLoading] = useState(false);
             const [health, setHealth] = useState(false);
             const [stats, setStats] = useState({});
             const [tables, setTables] = useState([]);
-            const [table, setTable] = useState(null);
-            const [view, setView] = useState('structure');
-            const [structure, setStructure] = useState([]);
-            const [data, setData] = useState({ data: [], pagination: {} });
-            const [page, setPage] = useState(1);
+            const [selectedTable, setSelectedTable] = useState(null);
+            const [tableView, setTableView] = useState('structure'); // 'structure' or 'data'
+            const [tableStructure, setTableStructure] = useState([]);
+            const [tableData, setTableData] = useState([]);
             const [sql, setSql] = useState('');
-            const [result, setResult] = useState(null);
-            const [info, setInfo] = useState({});
+            const [queryResult, setQueryResult] = useState(null);
+            const [dbInfo, setDbInfo] = useState({});
 
             useEffect(() => {
-                const check = async () => {
-                    try {
-                        const r = await fetch(`${API}/health`);
-                        const d = await r.json();
-                        setHealth(d.success);
-                    } catch { setHealth(false); }
-                };
-                const load = async () => {
-                    try {
-                        const r = await fetch(`${API}/stats`);
-                        const d = await r.json();
-                        if (d.success) setStats(d.data);
-                    } catch (e) { console.error(e); }
-                };
-                check(); load();
-                const i = setInterval(check, 30000);
-                return () => clearInterval(i);
+                checkHealth();
+                loadStats();
+                const interval = setInterval(checkHealth, 30000);
+                return () => clearInterval(interval);
             }, []);
 
             useEffect(() => {
-                if (tab === 'tables') loadTables();
-                if (tab === 'info') loadInfo();
-            }, [tab]);
+                if (activeTab === 'tables') loadTables();
+                if (activeTab === 'info') loadDbInfo();
+            }, [activeTab]);
 
-            useEffect(() => {
-                if (table) {
-                    view === 'structure' ? loadStructure() : loadData();
+            const checkHealth = async () => {
+                try {
+                    const response = await fetch(`${API}/health`);
+                    const data = await response.json();
+                    setHealth(data.success);
+                } catch {
+                    setHealth(false);
                 }
-            }, [table, view, page]);
+            };
+
+            const loadStats = async () => {
+                try {
+                    const response = await fetch(`${API}/stats`);
+                    const data = await response.json();
+                    if (data.success) setStats(data.data);
+                } catch (error) {
+                    console.error('Failed to load stats:', error);
+                }
+            };
 
             const loadTables = async () => {
+                setLoading(true);
                 try {
-                    const r = await fetch(`${API}/tables`);
-                    const d = await r.json();
-                    if (d.success) setTables(d.data);
-                } catch (e) { console.error(e); }
+                    const response = await fetch(`${API}/tables`);
+                    const data = await response.json();
+                    if (data.success) setTables(data.data);
+                } catch (error) {
+                    console.error('Failed to load tables:', error);
+                } finally {
+                    setLoading(false);
+                }
             };
 
-            const loadStructure = async () => {
+            const loadTableStructure = async (tableName) => {
+                setLoading(true);
                 try {
-                    const r = await fetch(`${API}/tables/${table}/structure`);
-                    const d = await r.json();
-                    if (d.success) setStructure(d.data);
-                } catch (e) { console.error(e); }
+                    const response = await fetch(`${API}/tables/${tableName}/structure`);
+                    const data = await response.json();
+                    if (data.success) setTableStructure(data.data);
+                } catch (error) {
+                    console.error('Failed to load table structure:', error);
+                } finally {
+                    setLoading(false);
+                }
             };
 
-            const loadData = async () => {
+            const loadTableData = async (tableName) => {
+                setLoading(true);
                 try {
-                    const r = await fetch(`${API}/tables/${table}/data?page=${page}&limit=20`);
-                    const d = await r.json();
-                    if (d.success) setData(d);
-                } catch (e) { console.error(e); }
+                    const response = await fetch(`${API}/tables/${tableName}/data?limit=100`);
+                    const data = await response.json();
+                    if (data.success) setTableData(data.data);
+                } catch (error) {
+                    console.error('Failed to load table data:', error);
+                } finally {
+                    setLoading(false);
+                }
             };
 
-            const execQuery = async () => {
-                if (!sql.trim()) return alert('请输入SQL');
+            const executeQuery = async () => {
+                if (!sql.trim()) return;
+                setLoading(true);
                 try {
-                    const r = await fetch(`${API}/query`, {
+                    const response = await fetch(`${API}/query`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ sql })
                     });
-                    const d = await r.json();
-                    setResult(d);
-                } catch (e) { setResult({ success: false, error: e.message }); }
+                    const data = await response.json();
+                    setQueryResult(data);
+                } catch (error) {
+                    setQueryResult({ success: false, error: error.message });
+                } finally {
+                    setLoading(false);
+                }
             };
 
-            const loadInfo = async () => {
+            const loadDbInfo = async () => {
+                setLoading(true);
                 try {
-                    const r = await fetch(`${API}/info`);
-                    const d = await r.json();
-                    if (d.success) setInfo(d.data);
-                } catch (e) { console.error(e); }
+                    const response = await fetch(`${API}/info`);
+                    const data = await response.json();
+                    if (data.success) setDbInfo(data.data);
+                } catch (error) {
+                    console.error('Failed to load database info:', error);
+                } finally {
+                    setLoading(false);
+                }
             };
 
-            const fmt = (v) => v === null ? 'NULL' : String(v).length > 100 ? String(v).substring(0, 100) + '...' : String(v);
+            const handleTableSelect = async (tableName) => {
+                setSelectedTable(tableName);
+                setTableView('structure'); // 默认显示结构
+                setTableData([]); // 清空之前的数据
+                await loadTableStructure(tableName);
+            };
+
+            const switchTableView = async (view) => {
+                if (view === tableView) return; // 如果已经是当前视图，不做任何操作
+                
+                setTableView(view);
+                if (view === 'structure' && tableStructure.length === 0) {
+                    await loadTableStructure(selectedTable);
+                } else if (view === 'data' && tableData.length === 0) {
+                    await loadTableData(selectedTable);
+                }
+            };
+
+            const structureColumns = [
+                { field: 'column_name', title: '列名' },
+                { 
+                    field: 'data_type', 
+                    title: '数据类型',
+                    formatter: (value) => <span className="tag tag-blue">{value}</span>
+                },
+                { 
+                    field: 'is_nullable', 
+                    title: '可空',
+                    formatter: (value) => value === 'YES' 
+                        ? <span className="tag tag-green">可空</span>
+                        : <span className="tag tag-red">非空</span>
+                },
+                { field: 'column_default', title: '默认值' },
+                { field: 'character_maximum_length', title: '最大长度' }
+            ];
 
             return (
-                <div className="bg-gray-50 min-h-screen">
-                    <header className="bg-white shadow-sm border-b">
-                        <div className="max-w-7xl mx-auto px-4 py-4">
+                <div className="min-h-screen">
+                    {/* Header */}
+                    <header className="glass sticky top-0 z-50 border-b border-white/20">
+                        <div className="max-w-7xl mx-auto px-6 py-4">
                             <div className="flex items-center justify-between">
-                                <div className="flex items-center space-x-3">
-                                    <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path>
-                                    </svg>
-                                    <h1 className="text-2xl font-bold">数据库管理面板</h1>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold">
+                                        DB
+                                    </div>
+                                    <div>
+                                        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                            数据库管理中心
+                                        </h1>
+                                        <p className="text-sm text-gray-500">PostgreSQL Database Admin</p>
+                                    </div>
                                 </div>
-                                <div className="flex items-center text-sm">
-                                    <span className={`w-2 h-2 rounded-full mr-2 ${health ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                                    <span className={health ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-                                        {health ? '连接正常' : '连接失败'}
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${health ? 'bg-green-500 pulse' : 'bg-red-500'}`} />
+                                    <span className="text-sm text-gray-600">
+                                        {health ? '连接正常' : '连接断开'}
                                     </span>
                                 </div>
                             </div>
                         </div>
                     </header>
 
-                    <main className="max-w-7xl mx-auto px-4 py-8">
-                        <div className="bg-white rounded-lg shadow-sm mb-6">
-                            <nav className="flex border-b">
-                                {['overview', 'tables', 'query', 'info'].map(t => (
-                                    <button key={t} onClick={() => setTab(t)} className={`px-6 py-3 font-medium ${tab === t ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-600 hover:text-gray-900'}`}>
-                                        {t === 'overview' ? '概览' : t === 'tables' ? '表管理' : t === 'query' ? '查询执行' : '数据库信息'}
+                    <div className="max-w-7xl mx-auto px-6 py-8">
+                        {/* Tabs */}
+                        <div className="card mb-8">
+                            <div className="flex">
+                                {['overview', 'tables', 'query', 'info'].map(tab => (
+                                    <button
+                                        key={tab}
+                                        onClick={() => setActiveTab(tab)}
+                                        className={`flex-1 px-6 py-4 font-medium transition-all ${
+                                            activeTab === tab 
+                                                ? 'text-blue-600 bg-blue-50 border-b-2 border-blue-600' 
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        {tab === 'overview' ? '概览' : 
+                                         tab === 'tables' ? '数据表' : 
+                                         tab === 'query' ? 'SQL查询' : '系统信息'}
                                     </button>
                                 ))}
-                            </nav>
+                            </div>
                         </div>
 
-                        {tab === 'overview' && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {/* Loading */}
+                        {loading && (
+                            <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
+                                <div className="bg-white rounded-xl p-6 flex items-center gap-4">
+                                    <div className="spinner" />
+                                    <span>加载中...</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Overview Tab */}
+                        {activeTab === 'overview' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 fade-in">
                                 {[
-                                    { l: '表数量', v: stats.tables, c: 'blue' },
-                                    { l: '索引数量', v: stats.indexes, c: 'green' },
-                                    { l: '数据库大小', v: stats.databaseSize, c: 'purple' },
-                                    { l: '活跃连接', v: stats.activeConnections, c: 'orange' }
-                                ].map((s, i) => (
-                                    <div key={i} className="bg-white rounded-lg shadow-sm p-6">
-                                        <p className="text-sm font-medium text-gray-600">{s.l}</p>
-                                        <p className="text-3xl font-bold mt-2">{s.v || '-'}</p>
+                                    { label: '数据表', value: stats.tables, icon: '📊', color: 'blue' },
+                                    { label: '索引', value: stats.indexes, icon: '🔍', color: 'green' },
+                                    { label: '数据库大小', value: stats.databaseSize, icon: '💾', color: 'purple' },
+                                    { label: '活跃连接', value: stats.activeConnections, icon: '🔗', color: 'orange' }
+                                ].map((stat, i) => (
+                                    <div key={i} className="card p-6">
+                                        <div className="text-3xl mb-3">{stat.icon}</div>
+                                        <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
+                                        <p className="text-3xl font-bold">{stat.value || '-'}</p>
                                     </div>
                                 ))}
                             </div>
                         )}
 
-                        {tab === 'tables' && (
-                            <div className="space-y-6">
-                                <div className="bg-white rounded-lg shadow-sm p-6">
-                                    <div className="flex justify-between mb-4">
-                                        <h2 className="text-lg font-semibold">数据表列表</h2>
-                                        <button onClick={loadTables} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">刷新</button>
-                                    </div>
-                                    <div className="space-y-2">
-                                        {tables.map(t => (
-                                            <div key={t.table_name} onClick={() => { setTable(t.table_name); setPage(1); }} className="flex justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                                                <div>
-                                                    <p className="font-medium">{t.table_name}</p>
-                                                    <p className="text-sm text-gray-500">Schema: {t.table_schema}</p>
+                        {/* Tables Tab */}
+                        {activeTab === 'tables' && (
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in">
+                                <div className="lg:col-span-1">
+                                    <div className="card p-6">
+                                        <h3 className="text-lg font-semibold mb-4">数据表列表</h3>
+                                        <div className="space-y-2 max-h-96 overflow-auto">
+                                            {tables.map(table => (
+                                                <div
+                                                    key={table.table_name}
+                                                    onClick={() => handleTableSelect(table.table_name)}
+                                                    className={`p-3 rounded-lg cursor-pointer transition-all ${
+                                                        selectedTable === table.table_name
+                                                            ? 'bg-blue-50 border border-blue-300'
+                                                            : 'hover:bg-gray-50 border border-transparent'
+                                                    }`}
+                                                >
+                                                    <div className="font-medium">{table.table_name}</div>
+                                                    <div className="text-xs text-gray-500">Schema: {table.table_schema}</div>
                                                 </div>
+                                            ))}
                                             </div>
-                                        ))}
                                     </div>
                                 </div>
 
-                                {table && (
-                                    <div className="bg-white rounded-lg shadow-sm p-6">
-                                        <h3 className="text-lg font-semibold mb-4">表详情: <span className="text-blue-600">{table}</span></h3>
-                                        <div className="mb-4">
-                                            <button onClick={() => setView('structure')} className={`px-4 py-2 rounded-lg mr-2 ${view === 'structure' ? 'bg-gray-100' : 'text-gray-600'}`}>表结构</button>
-                                            <button onClick={() => setView('data')} className={`px-4 py-2 rounded-lg ${view === 'data' ? 'bg-gray-100' : 'text-gray-600'}`}>表数据</button>
-                                        </div>
-
-                                        {view === 'structure' ? (
-                                            <div className="table-container">
-                                                <table className="w-full">
-                                                    <thead>
-                                                        <tr className="border-b">
-                                                            <th className="px-4 py-3 text-left text-xs uppercase">列名</th>
-                                                            <th className="px-4 py-3 text-left text-xs uppercase">数据类型</th>
-                                                            <th className="px-4 py-3 text-left text-xs uppercase">可空</th>
-                                                            <th className="px-4 py-3 text-left text-xs uppercase">默认值</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {structure.map((c, i) => (
-                                                            <tr key={i} className="border-b hover:bg-gray-50">
-                                                                <td className="px-4 py-3 font-medium">{c.column_name}</td>
-                                                                <td className="px-4 py-3">{c.data_type}</td>
-                                                                <td className="px-4 py-3">
-                                                                    <span className={`px-2 py-1 text-xs rounded-full ${c.is_nullable === 'YES' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                                                                        {c.is_nullable === 'YES' ? '是' : '否'}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="px-4 py-3">{c.column_default || '-'}</td>
-                                                            </tr>
-                                                        ))}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        ) : data.data.length > 0 ? (
-                                            <div>
-                                                <div className="table-container mb-4">
-                                                    <table className="w-full">
-                                                        <thead>
-                                                            <tr className="border-b">
-                                                                {Object.keys(data.data[0]).map(k => <th key={k} className="px-4 py-3 text-left text-xs uppercase whitespace-nowrap">{k}</th>)}
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {data.data.map((r, i) => (
-                                                                <tr key={i} className="border-b hover:bg-gray-50">
-                                                                    {Object.values(r).map((v, j) => <td key={j} className="px-4 py-3 whitespace-nowrap">{fmt(v)}</td>)}
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                <div className="lg:col-span-2">
+                                    {selectedTable ? (
+                                        <div className="card p-6">
+                                            <div className="mb-6">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <h3 className="text-lg font-semibold">
+                                                        表详情: <span className="text-blue-600">{selectedTable}</span>
+                                                    </h3>
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedTable(null);
+                                                            setTableStructure([]);
+                                                            setTableData([]);
+                                                        }}
+                                                        className="text-gray-400 hover:text-gray-600"
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                                        </svg>
+                                                    </button>
                                                 </div>
-                                                <div className="flex justify-between items-center pt-4 border-t">
-                                                    <div className="text-sm">显示 {(page - 1) * 20 + 1} - {Math.min(page * 20, data.pagination.total)} / 共 {data.pagination.total} 条</div>
-                                                    <div className="flex space-x-2">
-                                                        <button onClick={() => setPage(page - 1)} disabled={page === 1} className="px-3 py-1 border rounded disabled:opacity-50">上一页</button>
-                                                        <span className="px-3 py-1 text-sm">第 {page} / {data.pagination.totalPages} 页</span>
-                                                        <button onClick={() => setPage(page + 1)} disabled={page >= data.pagination.totalPages} className="px-3 py-1 border rounded disabled:opacity-50">下一页</button>
+                                                
+                                                <div className="flex gap-2">
+                                                    <div className="flex gap-2 p-1 bg-gray-100 rounded-lg flex-1">
+                                                        <button
+                                                            onClick={() => switchTableView('structure')}
+                                                            className={`flex-1 px-4 py-2 rounded-md font-medium transition-all ${
+                                                                tableView === 'structure'
+                                                                    ? 'bg-white text-blue-600 shadow-sm'
+                                                                    : 'text-gray-600 hover:text-gray-900'
+                                                            }`}
+                                                        >
+                                                            表结构
+                                                        </button>
+                                                        <button
+                                                            onClick={() => switchTableView('data')}
+                                                            className={`flex-1 px-4 py-2 rounded-md font-medium transition-all ${
+                                                                tableView === 'data'
+                                                                    ? 'bg-white text-blue-600 shadow-sm'
+                                                                    : 'text-gray-600 hover:text-gray-900'
+                                                            }`}
+                                                        >
+                                                            表数据
+                                                        </button>
                                                     </div>
+                                                    <button
+                                                        onClick={() => {
+                                                            if (tableView === 'structure') {
+                                                                loadTableStructure(selectedTable);
+                                                            } else {
+                                                                loadTableData(selectedTable);
+                                                            }
+                                                        }}
+                                                        className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                                        title="刷新数据"
+                                                    >
+                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                        </svg>
+                                                    </button>
                                                 </div>
                                             </div>
-                                        ) : <p className="text-center text-gray-500 py-8">没有数据</p>}
+
+                                            <div className="min-h-[400px]">
+                                                {loading ? (
+                                                    <div className="flex items-center justify-center py-20">
+                                                        <div className="text-center">
+                                                            <div className="spinner mx-auto mb-4" />
+                                                            <p className="text-gray-500">
+                                                                加载{tableView === 'structure' ? '表结构' : '表数据'}中...
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    tableView === 'structure' ? (
+                                                        <DataTable
+                                                            data={tableStructure}
+                                                            columns={structureColumns}
+                                                            pageSize={10}
+                                                            searchable={false}
+                                                        />
+                                                    ) : (
+                                                        <DataTable
+                                                            data={tableData}
+                                                            columns={tableData.length > 0 ? 
+                                                                Object.keys(tableData[0]).map(key => ({ field: key, title: key })) : 
+                                                                []
+                                                            }
+                                                            pageSize={20}
+                                                        />
+                                                    )
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="card p-12 text-center text-gray-500">
+                                            <svg className="w-24 h-24 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                                            </svg>
+                                            请选择一个表查看详情
                                     </div>
                                 )}
+                                </div>
                             </div>
                         )}
 
-                        {tab === 'query' && (
-                            <div className="space-y-6">
-                                <div className="bg-white rounded-lg shadow-sm p-6">
-                                    <h2 className="text-lg font-semibold mb-4">SQL 查询执行器</h2>
-                                    <p className="text-sm text-gray-600 mb-4">仅支持 SELECT 查询语句</p>
-                                    <textarea value={sql} onChange={e => setSql(e.target.value)} rows="6" className="w-full px-4 py-3 border rounded-lg font-mono text-sm" placeholder="输入 SQL 查询语句...&#10;例如: SELECT * FROM users LIMIT 10"></textarea>
-                                    <div className="flex space-x-4 mt-4">
-                                        <button onClick={execQuery} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">执行查询</button>
-                                        <button onClick={() => { setSql(''); setResult(null); }} className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">清空</button>
+                        {/* Query Tab */}
+                        {activeTab === 'query' && (
+                            <div className="space-y-6 fade-in">
+                                <div className="card p-6">
+                                    <h3 className="text-lg font-semibold mb-4">SQL 查询编辑器</h3>
+                                    <textarea
+                                        className="sql-editor w-full"
+                                        value={sql}
+                                        onChange={(e) => setSql(e.target.value)}
+                                        placeholder="-- 输入 SQL 查询语句&#10;-- 例如: SELECT * FROM users LIMIT 10"
+                                        onKeyDown={(e) => {
+                                            if (e.ctrlKey && e.key === 'Enter') {
+                                                e.preventDefault();
+                                                executeQuery();
+                                            }
+                                        }}
+                                    />
+                                    <div className="mt-4 flex justify-between items-center">
+                                        <div className="text-sm text-gray-500">
+                                            提示: 按 Ctrl+Enter 快速执行
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setSql('')}
+                                                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                            >
+                                                清空
+                                            </button>
+                                            <button
+                                                onClick={executeQuery}
+                                                className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all"
+                                            >
+                                                执行查询
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
 
-                                {result && (
-                                    <div className="bg-white rounded-lg shadow-sm p-6">
+                                {queryResult && (
+                                    <div className="card p-6">
                                         <h3 className="text-lg font-semibold mb-4">查询结果</h3>
-                                        {result.success ? result.data.length > 0 ? (
-                                            <div>
-                                                <div className="text-sm text-gray-600 mb-2">返回 {result.count} 条记录</div>
-                                                <div className="table-container">
-                                                    <table className="w-full">
-                                                        <thead>
-                                                            <tr className="border-b">{Object.keys(result.data[0]).map(k => <th key={k} className="px-4 py-3 text-left text-xs uppercase whitespace-nowrap">{k}</th>)}</tr>
-                                                        </thead>
-                                                        <tbody>
-                                                            {result.data.map((r, i) => (
-                                                                <tr key={i} className="border-b hover:bg-gray-50">
-                                                                    {Object.values(r).map((v, j) => <td key={j} className="px-4 py-3 whitespace-nowrap">{fmt(v)}</td>)}
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
+                                        {queryResult.success ? (
+                                            queryResult.data && queryResult.data.length > 0 ? (
+                                                <DataTable
+                                                    data={queryResult.data}
+                                                    columns={Object.keys(queryResult.data[0]).map(key => ({ 
+                                                        field: key, 
+                                                        title: key 
+                                                    }))}
+                                                    pageSize={50}
+                                                />
+                                            ) : (
+                                                <div className="text-center py-8 text-green-600">
+                                                    查询执行成功，但没有返回数据
                                                 </div>
-                                            </div>
-                                        ) : <p className="text-center text-gray-500 py-8">查询成功，但没有返回数据</p> : (
+                                            )
+                                        ) : (
                                             <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                                                 <p className="text-red-800 font-medium">查询失败</p>
-                                                <p className="text-red-600 text-sm mt-1">{result.message || result.error}</p>
+                                                <p className="text-red-600 text-sm mt-1">
+                                                    {queryResult.message || queryResult.error}
+                                                </p>
                                             </div>
                                         )}
                                     </div>
@@ -293,35 +934,33 @@
                             </div>
                         )}
 
-                        {tab === 'info' && (
-                            <div className="bg-white rounded-lg shadow-sm p-6">
-                                <div className="flex justify-between mb-4">
-                                    <h2 className="text-lg font-semibold">数据库详细信息</h2>
-                                    <button onClick={loadInfo} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">刷新</button>
-                                </div>
+                        {/* Info Tab */}
+                        {activeTab === 'info' && (
+                            <div className="card p-6 fade-in">
+                                <h3 className="text-lg font-semibold mb-6">数据库系统信息</h3>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {[
-                                        { l: '数据库名称', v: info.database },
-                                        { l: '数据库大小', v: info.size },
-                                        { l: '活跃连接数', v: info.connections }
-                                    ].map((x, i) => (
-                                        <div key={i} className="border rounded-lg p-4">
-                                            <p className="text-sm font-medium text-gray-500 mb-1">{x.l}</p>
-                                            <p className="text-lg font-semibold">{x.v || '-'}</p>
+                                        { label: '数据库名称', value: dbInfo.database },
+                                        { label: '数据库大小', value: dbInfo.size },
+                                        { label: '活跃连接数', value: dbInfo.connections },
+                                        { label: '数据库版本', value: dbInfo.version, full: true }
+                                    ].map((item, i) => (
+                                        <div key={i} className={`p-4 bg-gray-50 rounded-lg ${item.full ? 'md:col-span-2' : ''}`}>
+                                            <p className="text-sm text-gray-500 mb-1">{item.label}</p>
+                                            <p className={`${item.full ? 'font-mono text-sm' : 'text-xl font-semibold'}`}>
+                                                {item.value || '-'}
+                                            </p>
                                         </div>
                                     ))}
-                                    <div className="border rounded-lg p-4 md:col-span-2">
-                                        <p className="text-sm font-medium text-gray-500 mb-1">数据库版本</p>
-                                        <p className="text-sm text-gray-700 font-mono">{info.version || '-'}</p>
-                                    </div>
                                 </div>
                             </div>
                         )}
-                    </main>
+                    </div>
                 </div>
             );
         }
 
+        // 渲染应用
         ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
