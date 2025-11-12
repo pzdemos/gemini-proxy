@@ -504,6 +504,395 @@
             );
         }
 
+        // 创建表模态框组件
+        function CreateTableModal({ onClose, onSuccess, onError }) {
+            const [tableName, setTableName] = useState('');
+            const [tableComment, setTableComment] = useState('');
+            const [columns, setColumns] = useState([
+                { name: 'id', type: 'SERIAL', notNull: true, unique: false, defaultValue: '', comment: '', check: '', length: '', precision: '', scale: '' }
+            ]);
+            const [primaryKey, setPrimaryKey] = useState(['id']);
+            const [indexes, setIndexes] = useState([]);
+            const [submitting, setSubmitting] = useState(false);
+
+            const dataTypes = [
+                'SERIAL', 'BIGSERIAL', 'SMALLSERIAL',
+                'INTEGER', 'BIGINT', 'SMALLINT',
+                'NUMERIC', 'DECIMAL', 'REAL', 'DOUBLE PRECISION',
+                'VARCHAR', 'CHAR', 'TEXT',
+                'BOOLEAN',
+                'DATE', 'TIME', 'TIMESTAMP', 'TIMESTAMPTZ',
+                'UUID', 'JSON', 'JSONB',
+                'BYTEA', 'INET', 'MACADDR'
+            ];
+
+            const addColumn = () => {
+                setColumns([...columns, { 
+                    name: '', type: 'VARCHAR', notNull: false, unique: false, 
+                    defaultValue: '', comment: '', check: '', length: '255', 
+                    precision: '', scale: '' 
+                }]);
+            };
+
+            const removeColumn = (index) => {
+                const newColumns = columns.filter((_, i) => i !== index);
+                setColumns(newColumns);
+                setPrimaryKey(primaryKey.filter(pk => pk !== columns[index].name));
+            };
+
+            const updateColumn = (index, field, value) => {
+                const newColumns = [...columns];
+                newColumns[index][field] = value;
+                setColumns(newColumns);
+            };
+
+            const togglePrimaryKey = (columnName) => {
+                if (primaryKey.includes(columnName)) {
+                    setPrimaryKey(primaryKey.filter(pk => pk !== columnName));
+                } else {
+                    setPrimaryKey([...primaryKey, columnName]);
+                }
+            };
+
+            const addIndex = () => {
+                setIndexes([...indexes, { name: '', columns: [], unique: false, method: 'BTREE' }]);
+            };
+
+            const removeIndex = (index) => {
+                setIndexes(indexes.filter((_, i) => i !== index));
+            };
+
+            const updateIndex = (index, field, value) => {
+                const newIndexes = [...indexes];
+                newIndexes[index][field] = value;
+                setIndexes(newIndexes);
+            };
+
+            const handleSubmit = async () => {
+                if (!tableName.trim()) {
+                    onError('表名不能为空');
+                    return;
+                }
+
+                if (columns.length === 0 || columns.some(col => !col.name.trim())) {
+                    onError('列名不能为空');
+                    return;
+                }
+
+                setSubmitting(true);
+                try {
+                    const response = await fetch(`${API}/tables/create`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            tableName,
+                            columns,
+                            primaryKey,
+                            indexes,
+                            comment: tableComment
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        onSuccess();
+                    } else {
+                        onError(data.message || data.error || '创建表失败');
+                    }
+                } catch (error) {
+                    onError(error.message || '网络请求失败');
+                } finally {
+                    setSubmitting(false);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+                    <div className="bg-white rounded-xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+                            <h2 className="text-2xl font-bold">创建新表</h2>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
+                            <div className="space-y-6">
+                                {/* 表基本信息 */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">表名 *</label>
+                                        <input
+                                            type="text"
+                                            value={tableName}
+                                            onChange={(e) => setTableName(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            placeholder="例如: users"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">表注释</label>
+                                        <input
+                                            type="text"
+                                            value={tableComment}
+                                            onChange={(e) => setTableComment(e.target.value)}
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            placeholder="例如: 用户信息表"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* 列定义 */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className="text-lg font-semibold">列定义</h3>
+                                        <button
+                                            onClick={addColumn}
+                                            className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+                                        >
+                                            + 添加列
+                                        </button>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {columns.map((col, index) => (
+                                            <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">列名 *</label>
+                                                        <input
+                                                            type="text"
+                                                            value={col.name}
+                                                            onChange={(e) => updateColumn(index, 'name', e.target.value)}
+                                                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                                            placeholder="列名"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">数据类型 *</label>
+                                                        <select
+                                                            value={col.type}
+                                                            onChange={(e) => updateColumn(index, 'type', e.target.value)}
+                                                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                                        >
+                                                            {dataTypes.map(type => (
+                                                                <option key={type} value={type}>{type}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                    {(col.type.includes('VARCHAR') || col.type.includes('CHAR')) && (
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">长度</label>
+                                                            <input
+                                                                type="number"
+                                                                value={col.length}
+                                                                onChange={(e) => updateColumn(index, 'length', e.target.value)}
+                                                                className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                                                placeholder="255"
+                                                            />
+                                                        </div>
+                                                    )}
+                                                    {(col.type.includes('NUMERIC') || col.type.includes('DECIMAL')) && (
+                                                        <>
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-600 mb-1">精度</label>
+                                                                <input
+                                                                    type="number"
+                                                                    value={col.precision}
+                                                                    onChange={(e) => updateColumn(index, 'precision', e.target.value)}
+                                                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                                                    placeholder="10"
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-600 mb-1">小数位</label>
+                                                                <input
+                                                                    type="number"
+                                                                    value={col.scale}
+                                                                    onChange={(e) => updateColumn(index, 'scale', e.target.value)}
+                                                                    className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                                                    placeholder="2"
+                                                                />
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">默认值</label>
+                                                        <input
+                                                            type="text"
+                                                            value={col.defaultValue}
+                                                            onChange={(e) => updateColumn(index, 'defaultValue', e.target.value)}
+                                                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                                            placeholder="NOW()等"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">列注释</label>
+                                                        <input
+                                                            type="text"
+                                                            value={col.comment}
+                                                            onChange={(e) => updateColumn(index, 'comment', e.target.value)}
+                                                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                                            placeholder="列说明"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">CHECK约束</label>
+                                                        <input
+                                                            type="text"
+                                                            value={col.check}
+                                                            onChange={(e) => updateColumn(index, 'check', e.target.value)}
+                                                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                                            placeholder="例如: age > 0"
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={col.notNull}
+                                                            onChange={(e) => updateColumn(index, 'notNull', e.target.checked)}
+                                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                        <span>NOT NULL</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={col.unique}
+                                                            onChange={(e) => updateColumn(index, 'unique', e.target.checked)}
+                                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                        <span>UNIQUE</span>
+                                                    </label>
+                                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={primaryKey.includes(col.name)}
+                                                            onChange={() => togglePrimaryKey(col.name)}
+                                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                        <span>主键</span>
+                                                    </label>
+                                                    {columns.length > 1 && (
+                                                        <button
+                                                            onClick={() => removeColumn(index)}
+                                                            className="ml-auto px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors text-sm"
+                                                        >
+                                                            删除
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* 索引定义 */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-3">
+                                        <h3 className="text-lg font-semibold">索引定义（可选）</h3>
+                                        <button
+                                            onClick={addIndex}
+                                            className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm"
+                                        >
+                                            + 添加索引
+                                        </button>
+                                    </div>
+                                    <div className="space-y-3">
+                                        {indexes.map((idx, index) => (
+                                            <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">索引名称</label>
+                                                        <input
+                                                            type="text"
+                                                            value={idx.name}
+                                                            onChange={(e) => updateIndex(index, 'name', e.target.value)}
+                                                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                                            placeholder="自动生成"
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">索引方法</label>
+                                                        <select
+                                                            value={idx.method}
+                                                            onChange={(e) => updateIndex(index, 'method', e.target.value)}
+                                                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                                        >
+                                                            <option value="BTREE">BTREE</option>
+                                                            <option value="HASH">HASH</option>
+                                                            <option value="GIN">GIN</option>
+                                                            <option value="GIST">GIST</option>
+                                                        </select>
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-xs font-medium text-gray-600 mb-1">索引列</label>
+                                                        <select
+                                                            multiple
+                                                            value={idx.columns}
+                                                            onChange={(e) => {
+                                                                const selected = Array.from(e.target.selectedOptions).map(opt => opt.value);
+                                                                updateIndex(index, 'columns', selected);
+                                                            }}
+                                                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500"
+                                                        >
+                                                            {columns.map(col => (
+                                                                <option key={col.name} value={col.name}>{col.name}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center justify-between">
+                                                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={idx.unique}
+                                                            onChange={(e) => updateIndex(index, 'unique', e.target.checked)}
+                                                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                        />
+                                                        <span>唯一索引</span>
+                                                    </label>
+                                                    <button
+                                                        onClick={() => removeIndex(index)}
+                                                        className="px-3 py-1 bg-red-100 text-red-600 rounded hover:bg-red-200 transition-colors text-sm"
+                                                    >
+                                                        删除索引
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+                            <button
+                                onClick={onClose}
+                                disabled={submitting}
+                                className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors disabled:opacity-50"
+                            >
+                                取消
+                            </button>
+                            <button
+                                onClick={handleSubmit}
+                                disabled={submitting}
+                                className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                            >
+                                {submitting && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                                {submitting ? '创建中...' : '创建表'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
         // 错误提示组件
         function ErrorToast({ message, onClose }) {
             useEffect(() => {
@@ -548,6 +937,7 @@
             const [queryResult, setQueryResult] = useState(null);
             const [dbInfo, setDbInfo] = useState({});
             const [errorMessage, setErrorMessage] = useState('');
+            const [showCreateTable, setShowCreateTable] = useState(false);
 
             useEffect(() => {
                 checkHealth();
@@ -740,6 +1130,18 @@
                         />
                     )}
 
+                    {/* Create Table Modal */}
+                    {showCreateTable && (
+                        <CreateTableModal
+                            onClose={() => setShowCreateTable(false)}
+                            onSuccess={() => {
+                                setShowCreateTable(false);
+                                loadTables();
+                            }}
+                            onError={setErrorMessage}
+                        />
+                    )}
+
                     {/* Header */}
                     <header className="glass sticky top-0 z-50 border-b border-white/20">
                         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -820,7 +1222,15 @@
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 fade-in">
                                 <div className="lg:col-span-1">
                                     <div className="card p-6">
-                                        <h3 className="text-lg font-semibold mb-4">数据表列表</h3>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-lg font-semibold">数据表列表</h3>
+                                            <button
+                                                onClick={() => setShowCreateTable(true)}
+                                                className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all text-sm"
+                                            >
+                                                + 新建表
+                                            </button>
+                                        </div>
                                         <div className="space-y-2 max-h-96 overflow-auto">
                                             {tables.map(table => (
                                                 <div

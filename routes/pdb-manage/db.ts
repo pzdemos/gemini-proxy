@@ -297,6 +297,135 @@ dbRouter.get("/db/tables/:tableName/data", async (ctx: Context) => {
   }
 });
 
+// 创建新表
+dbRouter.post("/db/tables/create", async (ctx: Context) => {
+  try {
+    const body = await ctx.request.body({ type: "json" }).value;
+    const { tableName, columns, primaryKey, indexes, comment } = body;
+
+    // 验证表名
+    if (!tableName || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(tableName)) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "无效的表名。表名必须以字母或下划线开头，只能包含字母、数字和下划线",
+      };
+      return;
+    }
+
+    // 验证列定义
+    if (!columns || !Array.isArray(columns) || columns.length === 0) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "至少需要定义一个列",
+      };
+      return;
+    }
+
+    // 构建CREATE TABLE语句
+    const columnDefs = columns.map((col: any) => {
+      const parts = [`"${col.name}"`];
+      
+      // 数据类型
+      if (col.type.toUpperCase().includes('VARCHAR') || col.type.toUpperCase().includes('CHAR')) {
+        parts.push(`${col.type}${col.length ? `(${col.length})` : ''}`);
+      } else if (col.type.toUpperCase().includes('NUMERIC') || col.type.toUpperCase().includes('DECIMAL')) {
+        parts.push(`${col.type}${col.precision ? `(${col.precision}${col.scale ? `,${col.scale}` : ''})` : ''}`);
+      } else {
+        parts.push(col.type);
+      }
+      
+      // NOT NULL约束
+      if (col.notNull) {
+        parts.push('NOT NULL');
+      }
+      
+      // UNIQUE约束
+      if (col.unique) {
+        parts.push('UNIQUE');
+      }
+      
+      // DEFAULT值
+      if (col.defaultValue !== undefined && col.defaultValue !== null && col.defaultValue !== '') {
+        if (col.type.toUpperCase().includes('CHAR') || col.type.toUpperCase().includes('TEXT')) {
+          parts.push(`DEFAULT '${col.defaultValue}'`);
+        } else if (col.defaultValue.toUpperCase().includes('CURRENT_TIMESTAMP') || 
+                   col.defaultValue.toUpperCase().includes('NOW()') ||
+                   col.defaultValue.toUpperCase().includes('GEN_RANDOM_UUID()')) {
+          parts.push(`DEFAULT ${col.defaultValue}`);
+        } else {
+          parts.push(`DEFAULT ${col.defaultValue}`);
+        }
+      }
+      
+      // CHECK约束
+      if (col.check) {
+        parts.push(`CHECK (${col.check})`);
+      }
+      
+      // 列注释
+      if (col.comment) {
+        // 注释将在表创建后单独添加
+      }
+      
+      return parts.join(' ');
+    });
+
+    // 添加主键约束
+    if (primaryKey && primaryKey.length > 0) {
+      columnDefs.push(`PRIMARY KEY (${primaryKey.map((k: string) => `"${k}"`).join(', ')})`);
+    }
+
+    const createTableSQL = `CREATE TABLE "${tableName}" (\n  ${columnDefs.join(',\n  ')}\n)`;
+
+    // 执行创建表
+    await query(createTableSQL);
+
+    // 添加表注释
+    if (comment) {
+      await query(`COMMENT ON TABLE "${tableName}" IS '${comment.replace(/'/g, "''")}'`);
+    }
+
+    // 添加列注释
+    for (const col of columns) {
+      if (col.comment) {
+        await query(
+          `COMMENT ON COLUMN "${tableName}"."${col.name}" IS '${col.comment.replace(/'/g, "''")}'`
+        );
+      }
+    }
+
+    // 创建索引
+    if (indexes && Array.isArray(indexes)) {
+      for (const index of indexes) {
+        if (index.columns && index.columns.length > 0) {
+          const indexName = index.name || `idx_${tableName}_${index.columns.join('_')}`;
+          const indexType = index.unique ? 'UNIQUE INDEX' : 'INDEX';
+          const method = index.method || 'BTREE';
+          await query(
+            `CREATE ${indexType} "${indexName}" ON "${tableName}" USING ${method} (${index.columns.map((c: string) => `"${c}"`).join(', ')})`
+          );
+        }
+      }
+    }
+
+    ctx.response.body = {
+      success: true,
+      message: `表 ${tableName} 创建成功`,
+      tableName,
+    };
+  } catch (error) {
+    console.error("创建表失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "创建表失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
 // 获取数据库统计信息
 dbRouter.get("/db/stats", async (ctx: Context) => {
   try {
@@ -357,4 +486,3 @@ dbRouter.get("/db/stats", async (ctx: Context) => {
     };
   }
 });
-
