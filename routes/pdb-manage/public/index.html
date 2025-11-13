@@ -8,6 +8,7 @@
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <style>
         * {
             margin: 0;
@@ -30,6 +31,17 @@
             50% { opacity: 0.5; }
         }
 
+        @keyframes shimmer {
+            0% { background-position: -1000px 0; }
+            100% { background-position: 1000px 0; }
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0.9); opacity: 0; }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
         .fade-in {
             animation: fadeIn 0.5s ease-out;
         }
@@ -40,6 +52,14 @@
 
         .pulse {
             animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .animate-fadeIn {
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .animate-bounceIn {
+            animation: bounceIn 0.5s ease-out;
         }
 
         /* 玻璃态效果 */
@@ -252,7 +272,7 @@
         }
     </script>
 </head>
-<body class="bg-gradient-to-br from-slate-50 via-white to-blue-50 min-h-screen">
+<body class="bg-slate-50 min-h-screen">
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, useCallback } = React;
@@ -404,13 +424,13 @@
                             <div className="flex gap-2">
                                 <button
                                     onClick={() => exportData('csv')}
-                                    className="px-3 py-1.5 text-sm bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition-colors"
+                                    className="px-3 py-1.5 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
                                 >
                                     导出 CSV
                                 </button>
                                 <button
                                     onClick={() => exportData('json')}
-                                    className="px-3 py-1.5 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                                    className="px-3 py-1.5 text-sm bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
                                 >
                                     导出 JSON
                                 </button>
@@ -665,9 +685,9 @@
                             <div
                                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                                     step === s
-                                        ? 'bg-blue-500 text-white'
+                                        ? 'bg-slate-900 text-white'
                                         : step > s
-                                        ? 'bg-green-500 text-white'
+                                        ? 'bg-emerald-500 text-white'
                                         : 'bg-gray-200 text-gray-500'
                                 }`}
                             >
@@ -682,7 +702,7 @@
                             {s < 3 && (
                                 <div
                                     className={`w-12 h-1 mx-2 ${
-                                        step > s ? 'bg-green-500' : 'bg-gray-200'
+                                        step > s ? 'bg-emerald-500' : 'bg-gray-200'
                                     }`}
                                 />
                             )}
@@ -729,7 +749,7 @@
                                     <h3 className="text-lg font-semibold">列定义</h3>
                                     <button
                                         onClick={addColumn}
-                                        className="px-3 py-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+                                        className="px-3 py-1.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors text-sm"
                                     >
                                         + 添加列
                                     </button>
@@ -752,7 +772,7 @@
                                                         {col.name || `列 ${index + 1}`}
                                                     </span>
                                                     {col.name && primaryKey.includes(col.name) && (
-                                                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs rounded">主键</span>
+                                                        <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs rounded">主键</span>
                                                     )}
                                                 </div>
                                                 {columns.length > 1 && (
@@ -904,7 +924,7 @@
                                     <h3 className="text-lg font-semibold">索引定义（可选）</h3>
                                     <button
                                         onClick={addIndex}
-                                        className="px-3 py-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm"
+                                        className="px-3 py-1.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors text-sm"
                                     >
                                         + 添加索引
                                     </button>
@@ -928,7 +948,7 @@
                                                             {idx.name || `索引 ${index + 1}`}
                                                         </span>
                                                         {idx.unique && (
-                                                            <span className="px-2 py-0.5 bg-green-100 text-green-800 text-xs rounded">唯一</span>
+                                                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-xs rounded">唯一</span>
                                                         )}
                                                     </div>
                                                     <button
@@ -1024,7 +1044,7 @@
 
             return (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-                    <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                             <h2 className="text-2xl font-bold">创建新表</h2>
                             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -1069,7 +1089,7 @@
                                                 nextStep();
                                             }
                                         }}
-                                        className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                                        className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors"
                                     >
                                         下一步
                                     </button>
@@ -1077,7 +1097,7 @@
                                     <button
                                         onClick={handleSubmit}
                                         disabled={submitting}
-                                        className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all disabled:opacity-50 flex items-center gap-2"
+                                        className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all disabled:opacity-50 flex items-center gap-2"
                                     >
                                         {submitting && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
                                         {submitting ? '创建中...' : '创建表'}
@@ -1119,7 +1139,7 @@
 
             return (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
-                    <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                    <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                             <h2 className="text-xl font-bold">选择数据表</h2>
                             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
@@ -1202,7 +1222,7 @@
                             <button
                                 onClick={onLoad}
                                 disabled={selectedTables.length === 0}
-                                className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 加载选中的表 ({selectedTables.length})
                             </button>
@@ -1221,7 +1241,7 @@
 
             return (
                 <div className="fixed top-20 right-6 z-50 fade-in">
-                    <div className="bg-red-50 border border-red-200 rounded-lg shadow-lg p-4 max-w-md">
+                    <div className="bg-red-50 border border-red-200 rounded-lg shadow-md p-4 max-w-md">
                         <div className="flex items-start gap-3">
                             <svg className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1266,10 +1286,13 @@
             const [selectedAiModel, setSelectedAiModel] = useState('gemini-2.5-flash');
             const [aiPrompt, setAiPrompt] = useState('');
             const [generatedSql, setGeneratedSql] = useState('');
+            const [sqlExplanation, setSqlExplanation] = useState(''); // SQL解释
             const [validationResult, setValidationResult] = useState(null);
             const [aiLoading, setAiLoading] = useState(false);
             const [showAiPanel, setShowAiPanel] = useState(false);
             const [databaseSchema, setDatabaseSchema] = useState('');
+            const [selectedTablesForAI, setSelectedTablesForAI] = useState([]); // 用于AI生成的选中表
+            const [showTableSelectorForAI, setShowTableSelectorForAI] = useState(false); // 显示AI表选择器
 
             useEffect(() => {
                 checkHealth();
@@ -1463,12 +1486,12 @@
                 }
             };
 
-            const loadDatabaseSchema = async () => {
+            const loadDatabaseSchema = async (specificTables = null) => {
                 try {
                     // 先检查数据库连接状态
                     const healthResponse = await fetch(`${API}/health`);
                     const healthData = await healthResponse.json();
-                    
+
                     if (!healthData.enabled) {
                         // 数据库未启用，使用示例schema
                         const exampleSchema = `数据库表结构信息（示例）：
@@ -1489,11 +1512,11 @@
 - user_id: INTEGER NOT NULL
 - total_amount: NUMERIC(10,2) NOT NULL
 - order_date: TIMESTAMP NOT NULL`;
-                        
+
                         setDatabaseSchema(exampleSchema + "\n\n注意：这是示例数据库结构。启用数据库功能后，AI将根据实际表结构生成SQL。");
                         return;
                     }
-                    
+
                     if (!healthData.success) {
                         // 数据库连接失败，使用示例schema
                         const exampleSchema = `数据库表结构信息（示例）：
@@ -1514,26 +1537,37 @@
 - user_id: INTEGER NOT NULL
 - total_amount: NUMERIC(10,2) NOT NULL
 - order_date: TIMESTAMP NOT NULL`;
-                        
+
                         setDatabaseSchema(exampleSchema + "\n\n注意：数据库连接失败，已使用示例结构。AI可能无法生成准确的SQL。");
                         return;
                     }
-                    
+
                     // 数据库连接正常，加载实际表结构
                     const response = await fetch(`${API}/tables`);
                     const tablesData = await response.json();
-                    
+
                     if (tablesData.success && tablesData.data && tablesData.data.length > 0) {
                         let schema = "数据库表结构信息：\n";
-                        
-                        // 显示前5个表的详细结构（减少API调用）
-                        const tablesToLoad = tablesData.data.slice(0, 5);
-                        
+
+                        // 根据参数决定加载哪些表
+                        let tablesToLoad;
+                        if (specificTables && Array.isArray(specificTables) && specificTables.length > 0) {
+                            // 使用指定的表列表
+                            tablesToLoad = tablesData.data.filter(table => specificTables.includes(table.table_name));
+                            if (tablesToLoad.length === 0) {
+                                setErrorMessage('选中的表不存在或无法访问');
+                                return;
+                            }
+                        } else {
+                            // 默认显示前5个表的详细结构（减少API调用）
+                            tablesToLoad = tablesData.data.slice(0, 5);
+                        }
+
                         for (const table of tablesToLoad) {
                             try {
                                 const structureResponse = await fetch(`${API}/tables/${table.table_name}/structure`);
                                 const structureData = await structureResponse.json();
-                                
+
                                 if (structureData.success && structureData.data) {
                                     schema += `\n表名: ${table.table_name}\n`;
                                     structureData.data.forEach(col => {
@@ -1545,11 +1579,17 @@
                                 schema += `\n表名: ${table.table_name}\n- (结构加载失败)\n`;
                             }
                         }
-                        
-                        if (tablesData.data.length > 5) {
-                            schema += `\n... 还有 ${tablesData.data.length - 5} 个表`;
+
+                        // 如果没有指定特定表，并且数据库中有更多表，则显示提示
+                        if (!specificTables && tablesData.data.length > 5) {
+                            schema += `\n\n提示：数据库中还有 ${tablesData.data.length - 5} 个表未显示。您可以选择特定的表来生成SQL。`;
                         }
-                        
+
+                        // 如果指定了特定表，添加说明
+                        if (specificTables && specificTables.length > 0) {
+                            schema += `\n\n已选择 ${tablesToLoad.length} 个表用于AI生成SQL`;
+                        }
+
                         setDatabaseSchema(schema);
                     } else {
                         // 数据库中没有表，使用默认schema
@@ -1566,7 +1606,7 @@
 - username: VARCHAR(255) NOT NULL
 - email: VARCHAR(255) NULL
 - created_at: TIMESTAMP NOT NULL`;
-                        
+
                         setDatabaseSchema(defaultSchema);
                     }
                 } catch (error) {
@@ -1586,7 +1626,7 @@
 - category_id: INTEGER NULL
 
 注意：无法加载实际数据库结构，AI将基于示例结构生成SQL。`;
-                    
+
                     setDatabaseSchema(defaultSchema);
                 }
             };
@@ -1616,6 +1656,7 @@
                     
                     if (data.success) {
                         setGeneratedSql(data.sql);
+                        setSqlExplanation(data.explanation || ''); // 保存解释
                         // 自动填充到SQL编辑器
                         setSql(data.sql);
                         setErrorMessage('');
@@ -1733,16 +1774,30 @@
                         />
                     )}
 
+                    {/* AI Table Selector Modal */}
+                    {showTableSelectorForAI && (
+                        <TableSelector
+                            availableTables={availableTables}
+                            selectedTables={selectedTablesForAI}
+                            onTablesChange={setSelectedTablesForAI}
+                            onLoad={() => {
+                                loadDatabaseSchema(selectedTablesForAI.length > 0 ? selectedTablesForAI : null);
+                                setShowTableSelectorForAI(false);
+                            }}
+                            onClose={() => setShowTableSelectorForAI(false)}
+                        />
+                    )}
+
                     {/* Header */}
                     <header className="glass sticky top-0 z-50 border-b border-white/20">
                         <div className="max-w-7xl mx-auto px-6 py-4">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold">
+                                    <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center text-white font-bold">
                                         DB
                                     </div>
                                     <div>
-                                        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                                        <h1 className="text-2xl font-bold text-slate-900">
                                             数据库管理中心
                                         </h1>
                                         <p className="text-sm text-gray-500">PostgreSQL Database Admin</p>
@@ -1767,8 +1822,8 @@
                                         key={tab}
                                         onClick={() => setActiveTab(tab)}
                                         className={`flex-1 px-6 py-4 font-medium transition-all ${
-                                            activeTab === tab 
-                                                ? 'text-blue-600 bg-blue-50 border-b-2 border-blue-600' 
+                                            activeTab === tab
+                                                ? 'text-slate-900 bg-slate-50 border-b-2 border-slate-900'
                                                 : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                                         }`}
                                     >
@@ -1794,15 +1849,25 @@
                         {activeTab === 'overview' && (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 fade-in">
                                 {[
-                                    { label: '数据表', value: stats.tables, icon: '📊', color: 'blue' },
-                                    { label: '索引', value: stats.indexes, icon: '🔍', color: 'green' },
-                                    { label: '数据库大小', value: stats.databaseSize, icon: '💾', color: 'purple' },
-                                    { label: '活跃连接', value: stats.activeConnections, icon: '🔗', color: 'orange' }
+                                    { label: '数据表', value: stats.tables, icon: 'fa-table', color: 'slate' },
+                                    { label: '索引', value: stats.indexes, icon: 'fa-key', color: 'amber' },
+                                    { label: '数据库大小', value: stats.databaseSize, icon: 'fa-database', color: 'slate' },
+                                    { label: '活跃连接', value: stats.activeConnections, icon: 'fa-plug', color: 'emerald' }
                                 ].map((stat, i) => (
-                                    <div key={i} className="card p-6">
-                                        <div className="text-3xl mb-3">{stat.icon}</div>
+                                    <div key={i} className="card p-6 hover:shadow-md transition-shadow">
+                                        <div className={`w-12 h-12 rounded-lg flex items-center justify-center mb-4 ${
+                                            stat.color === 'slate' ? 'bg-slate-100' :
+                                            stat.color === 'amber' ? 'bg-amber-100' :
+                                            stat.color === 'emerald' ? 'bg-emerald-100' : 'bg-slate-100'
+                                        }`}>
+                                            <i className={`fas ${stat.icon} text-2xl ${
+                                                stat.color === 'slate' ? 'text-slate-600' :
+                                                stat.color === 'amber' ? 'text-amber-600' :
+                                                stat.color === 'emerald' ? 'text-emerald-600' : 'text-slate-600'
+                                            }`}></i>
+                                        </div>
                                         <p className="text-sm text-gray-500 mb-1">{stat.label}</p>
-                                        <p className="text-3xl font-bold">{stat.value || '-'}</p>
+                                        <p className="text-3xl font-bold text-slate-900">{stat.value || '-'}</p>
                                     </div>
                                 ))}
                             </div>
@@ -1817,7 +1882,7 @@
                                             <h3 className="text-lg font-semibold">数据表列表</h3>
                                             <button
                                                 onClick={() => setShowCreateTable(true)}
-                                                className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all text-sm"
+                                                className="px-3 py-1.5 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all text-sm"
                                             >
                                                 + 新建表
                                             </button>
@@ -1829,7 +1894,7 @@
                                                     onClick={() => handleTableSelect(table.table_name)}
                                                     className={`p-3 rounded-lg cursor-pointer transition-all ${
                                                         selectedTable === table.table_name
-                                                            ? 'bg-blue-50 border border-blue-300'
+                                                            ? 'bg-slate-50 border border-slate-300'
                                                             : 'hover:bg-gray-50 border border-transparent'
                                                     }`}
                                                 >
@@ -1894,7 +1959,7 @@
                                                                 loadTableData(selectedTable);
                                                             }
                                                         }}
-                                                        className="px-4 py-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-colors"
+                                                        className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
                                                         title="刷新数据"
                                                     >
                                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1951,34 +2016,33 @@
                         {activeTab === 'query' && (
                             <div className="space-y-6 fade-in">
                                 {/* AI助手面板 */}
-                                <div className="card p-6">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-lg font-semibold flex items-center gap-2">
-                                            <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                                            </svg>
-                                            AI SQL助手
-                                        </h3>
-                                        <button
-                                            onClick={() => setShowAiPanel(!showAiPanel)}
-                                            className="text-purple-600 hover:text-purple-800"
-                                        >
-                                            <svg className={`w-5 h-5 transition-transform ${showAiPanel ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                                            </svg>
-                                        </button>
+                                <div className="card overflow-hidden border border-slate-200 shadow-sm">
+                                    <div className="bg-slate-900 px-6 py-4 border-b border-slate-800">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-lg font-semibold text-white flex items-center gap-3">
+                                                <i className="fas fa-brain text-amber-400 text-xl"></i>
+                                                <span>AI SQL 助手</span>
+                                                <span className="text-xs bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-md border border-amber-500/30">Beta</span>
+                                            </h3>
+                                            <button
+                                                onClick={() => setShowAiPanel(!showAiPanel)}
+                                                className="text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg p-2 transition-all"
+                                            >
+                                                <i className={`fas fa-chevron-down transition-transform ${showAiPanel ? 'rotate-180' : ''}`}></i>
+                                            </button>
+                                        </div>
                                     </div>
                                     
                                     {showAiPanel && (
-                                        <div className="space-y-4">
-                                            {/* 模型选择器和参数设置 */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-2">AI模型</label>
+                                        <div className="p-6 space-y-5">
+                                            {/* 控制栏 */}
+                                            <div className="flex flex-wrap gap-3 items-center justify-between bg-slate-50 p-4 rounded-lg border border-slate-200">
+                                                <div className="flex items-center gap-3 flex-1">
+                                                    <i className="fas fa-microchip text-slate-600"></i>
                                                     <select
                                                         value={selectedAiModel}
                                                         onChange={(e) => setSelectedAiModel(e.target.value)}
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                                        className="flex-1 min-w-[200px] px-3 py-2 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400 text-sm text-slate-700"
                                                     >
                                                         {aiModels.map(model => (
                                                             <option key={model.name} value={model.name}>
@@ -1987,119 +2051,173 @@
                                                         ))}
                                                     </select>
                                                 </div>
-                                                <div className="flex flex-col gap-2">
+                                                <div className="flex gap-2">
                                                     <button
                                                         onClick={loadAiModels}
-                                                        className="px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm"
+                                                        className="px-3 py-2 bg-white border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all text-sm flex items-center gap-2"
+                                                        title="刷新模型列表"
                                                     >
-                                                        刷新模型
+                                                        <i className="fas fa-sync-alt"></i>
                                                     </button>
                                                     <button
-                                                        onClick={loadDatabaseSchema}
-                                                        className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm"
+                                                        onClick={() => {
+                                                            if (availableTables.length === 0) loadAvailableTables();
+                                                            setShowTableSelectorForAI(true);
+                                                        }}
+                                                        className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all text-sm flex items-center gap-2"
                                                     >
-                                                        刷新数据库结构
+                                                        <i className="fas fa-table"></i>
+                                                        <span>选择表</span>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => loadDatabaseSchema(selectedTablesForAI.length > 0 ? selectedTablesForAI : null)}
+                                                        className="px-4 py-2 bg-white border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all text-sm flex items-center gap-2"
+                                                    >
+                                                        <i className="fas fa-database"></i>
+                                                        <span>刷新结构</span>
                                                     </button>
                                                 </div>
                                             </div>
 
                                             {/* 数据库结构状态提示 */}
-                                            <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                                                    </svg>
-                                                    <span className="font-medium">数据库结构状态：</span>
+                                            {databaseSchema && (
+                                                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3">
+                                                    <div className="flex items-start gap-3">
+                                                        <i className="fas fa-database text-slate-500 mt-1"></i>
+                                                        <div className="flex-1 text-sm">
+                                                            <div className="flex items-center gap-2 text-slate-700 font-medium mb-1">
+                                                                <span>已加载 {databaseSchema.split('表名:').length - 1} 个数据表</span>
+                                                            </div>
+                                                            {selectedTablesForAI.length > 0 && (
+                                                                <div className="text-slate-600 flex items-center gap-2 mt-2 flex-wrap">
+                                                                    <i className="fas fa-check-circle text-emerald-500"></i>
+                                                                    <span>已选择:</span>
+                                                                    {selectedTablesForAI.map(t => <span key={t} className="inline-block bg-white border border-slate-300 px-2 py-0.5 rounded text-xs">{t}</span>)}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
                                                 </div>
-                                                <div className="pl-6">
-                                                    {databaseSchema ? (
-                                                        <span className="text-green-600">
-                                                            ✅ 已加载数据库结构信息（包含 {databaseSchema.split('表名:').length - 1} 个表）
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-orange-600">
-                                                            ⏳ 正在加载数据库结构...
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
+                                            )}
 
                                             {/* AI提示语输入 */}
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">SQL生成提示语</label>
+                                            <div className="relative">
+                                                <div className="flex items-center gap-2 mb-3">
+                                                    <i className="fas fa-pen text-slate-600"></i>
+                                                    <label className="text-sm font-medium text-slate-700">描述你的需求</label>
+                                                </div>
                                                 <textarea
-                                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
+                                                    className="w-full px-4 py-3 border-2 border-slate-200 rounded-lg focus:ring-2 focus:ring-slate-400 focus:border-slate-400 resize-none transition-all text-slate-700"
                                                     rows="3"
                                                     value={aiPrompt}
                                                     onChange={(e) => setAiPrompt(e.target.value)}
-                                                    placeholder="例如：查询用户表中所有年龄大于25岁的用户信息，包括姓名、邮箱和注册时间"
+                                                    placeholder="例如：查询所有活跃用户的订单统计，按月份分组并计算总金额"
                                                 />
+                                                <div className="absolute bottom-3 right-3 text-xs text-slate-400">
+                                                    {aiPrompt.length} 字符
+                                                </div>
                                             </div>
 
                                             {/* AI操作按钮 */}
-                                            <div className="flex gap-2">
+                                            <div className="flex gap-3">
                                                 <button
                                                     onClick={generateSql}
                                                     disabled={aiLoading || !aiPrompt.trim()}
-                                                    className="px-4 py-2 bg-gradient-to-r from-purple-500 to-pink-600 text-white rounded-lg hover:from-purple-600 hover:to-pink-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                    className="flex-1 px-6 py-3 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 font-medium shadow-sm"
                                                 >
-                                                    {aiLoading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                                                    生成SQL
+                                                    {aiLoading ? (
+                                                        <>
+                                                            <i className="fas fa-circle-notch fa-spin"></i>
+                                                            <span>生成中...</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <i className="fas fa-wand-magic-sparkles"></i>
+                                                            <span>生成 SQL</span>
+                                                        </>
+                                                    )}
                                                 </button>
                                                 <button
                                                     onClick={validateSql}
                                                     disabled={aiLoading || !sql.trim()}
-                                                    className="px-4 py-2 bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-lg hover:from-green-600 hover:to-teal-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                                    className="px-6 py-3 bg-white border-2 border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 hover:border-slate-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
                                                 >
-                                                    {aiLoading && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
-                                                    语法检查
+                                                    <i className="fas fa-check-circle"></i>
+                                                    <span>语法检查</span>
                                                 </button>
                                             </div>
 
                                             {/* AI生成结果 */}
                                             {generatedSql && (
-                                                <div className="border border-purple-200 rounded-lg p-4 bg-purple-50">
-                                                    <div className="flex items-center justify-between mb-2">
-                                                        <h4 className="font-medium text-purple-800">AI生成的SQL</h4>
-                                                        <button
-                                                            onClick={() => setGeneratedSql('')}
-                                                            className="text-purple-600 hover:text-purple-800"
-                                                        >
-                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                                            </svg>
-                                                        </button>
+                                                <div className="space-y-3 animate-fadeIn">
+                                                    {/* SQL代码 */}
+                                                    <div className="relative group">
+                                                        <div className="absolute -top-2 left-4 px-3 py-1 bg-slate-900 text-white text-xs font-medium rounded-md flex items-center gap-2 shadow-sm border border-slate-700">
+                                                            <i className="fas fa-robot text-amber-400"></i>
+                                                            <span>AI 生成</span>
+                                                        </div>
+                                                        <div className="border-2 border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                                                            <div className="bg-slate-50 px-4 py-3 flex items-center justify-between border-b border-slate-200">
+                                                                <div className="flex items-center gap-2 text-slate-700 font-medium">
+                                                                    <i className="fas fa-code"></i>
+                                                                    <span>生成的 SQL 语句</span>
+                                                                </div>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setGeneratedSql('');
+                                                                        setSqlExplanation('');
+                                                                    }}
+                                                                    className="text-slate-500 hover:bg-slate-200 rounded-lg p-2 transition-all"
+                                                                    title="清除结果"
+                                                                >
+                                                                    <i className="fas fa-times"></i>
+                                                                </button>
+                                                            </div>
+                                                            <div className="bg-slate-900 text-gray-100 p-4 font-mono text-sm">
+                                                                <pre className="whitespace-pre-wrap leading-relaxed">{generatedSql}</pre>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                    <div className="bg-gray-900 text-gray-100 rounded p-3 font-mono text-sm">
-                                                        <pre className="whitespace-pre-wrap">{generatedSql}</pre>
-                                                    </div>
+
+                                                    {/* SQL解释 */}
+                                                    {sqlExplanation && (
+                                                        <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-sm">
+                                                            <div className="px-4 py-3 border-b border-slate-200 flex items-center gap-2 bg-slate-50">
+                                                                <i className="fas fa-info-circle text-slate-600"></i>
+                                                                <h4 className="font-medium text-slate-700">SQL 说明</h4>
+                                                            </div>
+                                                            <div className="p-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+                                                                {sqlExplanation}
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             )}
 
                                             {/* AI语法检查结果 */}
                                             {validationResult && (
-                                                <div className={`border rounded-lg p-4 ${
-                                                    validationResult.isCorrect 
-                                                        ? 'border-green-200 bg-green-50' 
-                                                        : 'border-red-200 bg-red-50'
+                                                <div className={`border-2 rounded-lg overflow-hidden shadow-sm ${
+                                                    validationResult.isCorrect
+                                                        ? 'border-emerald-200 bg-white'
+                                                        : 'border-red-200 bg-white'
                                                 }`}>
-                                                    <div className="flex items-center gap-2 mb-2">
+                                                    <div className={`px-4 py-3 border-b flex items-center gap-3 ${
+                                                        validationResult.isCorrect
+                                                            ? 'border-emerald-200 bg-emerald-50'
+                                                            : 'border-red-200 bg-red-50'
+                                                    }`}>
                                                         {validationResult.isCorrect ? (
-                                                            <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                            </svg>
+                                                            <i className="fas fa-check-circle text-emerald-600 text-xl"></i>
                                                         ) : (
-                                                            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                            </svg>
+                                                            <i className="fas fa-exclamation-circle text-red-600 text-xl"></i>
                                                         )}
-                                                        <h4 className={`font-medium ${
-                                                            validationResult.isCorrect ? 'text-green-800' : 'text-red-800'
+                                                        <h4 className={`font-semibold ${
+                                                            validationResult.isCorrect ? 'text-emerald-700' : 'text-red-700'
                                                         }`}>
-                                                            {validationResult.isCorrect ? '语法检查通过' : '发现语法问题'}
+                                                            {validationResult.isCorrect ? 'SQL 语法正确 ✓' : 'SQL 语法错误 ✗'}
                                                         </h4>
                                                     </div>
-                                                    <div className="text-sm whitespace-pre-wrap">
+                                                    <div className="p-4 text-sm leading-relaxed whitespace-pre-wrap text-slate-700">
                                                         {validationResult.validationResult}
                                                     </div>
                                                 </div>
@@ -2136,7 +2254,7 @@
                                             </button>
                                             <button
                                                 onClick={executeQuery}
-                                                className="px-6 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all"
+                                                className="px-6 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition-all"
                                             >
                                                 执行查询
                                             </button>

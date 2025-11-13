@@ -15,10 +15,216 @@ interface GoogleModelsResponse {
 
 // 配置
 const API_KEY = Deno.env.get("API_KEY") || "";
-const MODEL_NAME = "gemini-2.5-flash"; 
+const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY") || "";
+const MODEL_NAME = "gemini-2.5-flash";
 const CHAT_MODEL = "gemini-2.5-flash";
 const IMAGE_MODEL = "gemini-2.5-flash-image";
 const GOOGLE_AI_BASE_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models/";
+const DEEPSEEK_API_ENDPOINT = "https://api.deepseek.com/chat/completions";
+
+// SQL 内容清理函数 - 提取纯 SQL 语句并分离解释
+interface SQLCleanResult {
+  sql: string;
+  explanation: string;
+}
+
+function cleanSQLResponse(content: string): SQLCleanResult {
+  if (!content) return { sql: "", explanation: "" };
+
+  const originalContent = content.trim();
+  let cleaned = originalContent;
+  let explanation = "";
+
+  // 1. 提取 Markdown 代码块中的 SQL
+  const sqlCodeBlockRegex = /```sql\s*([\s\S]*?)```/i;
+  const sqlMatch = cleaned.match(sqlCodeBlockRegex);
+
+  if (sqlMatch && sqlMatch[1]) {
+    cleaned = sqlMatch[1].trim();
+
+    // 提取代码块之外的内容作为解释
+    const beforeBlock = originalContent.substring(0, sqlMatch.index || 0).trim();
+    const afterBlock = originalContent.substring((sqlMatch.index || 0) + sqlMatch[0].length).trim();
+
+    const explanationParts = [];
+    if (beforeBlock) explanationParts.push(beforeBlock);
+    if (afterBlock) explanationParts.push(afterBlock);
+    explanation = explanationParts.join('\n\n');
+  } else {
+    // 2. 尝试提取通用代码块
+    const generalCodeBlockRegex = /```\s*([\s\S]*?)```/;
+    const generalMatch = cleaned.match(generalCodeBlockRegex);
+
+    if (generalMatch && generalMatch[1]) {
+      cleaned = generalMatch[1].trim();
+
+      // 提取代码块之外的内容作为解释
+      const beforeBlock = originalContent.substring(0, generalMatch.index || 0).trim();
+      const afterBlock = originalContent.substring((generalMatch.index || 0) + generalMatch[0].length).trim();
+
+      const explanationParts = [];
+      if (beforeBlock) explanationParts.push(beforeBlock);
+      if (afterBlock) explanationParts.push(afterBlock);
+      explanation = explanationParts.join('\n\n');
+    }
+  }
+
+  // 3. 移除常见的非 SQL 前缀
+  const prefixesToRemove = [
+    /^这是.*?SQL.*?[:：]\s*/i,
+    /^以下是.*?SQL.*?[:：]\s*/i,
+    /^SQL.*?[:：]\s*/i,
+    /^查询.*?[:：]\s*/i,
+  ];
+
+  for (const prefix of prefixesToRemove) {
+    const removed = cleaned.match(prefix);
+    if (removed && removed[0]) {
+      // 将移除的前缀添加到解释中
+      if (!explanation && removed[0].trim()) {
+        explanation = removed[0].trim();
+      }
+      cleaned = cleaned.replace(prefix, '');
+    }
+  }
+
+  // 4. 分离 SQL 语句和解释性文字
+  const lines = cleaned.split('\n');
+  const sqlLines: string[] = [];
+  const explanationLines: string[] = [];
+  let foundSQL = false;
+  let sqlEnded = false;
+
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+
+    // 检测是否是 SQL 语句行
+    const isSQLLine = /^(SELECT|INSERT|UPDATE|DELETE|CREATE|DROP|ALTER|TRUNCATE|WITH|EXPLAIN|ANALYZE)/i.test(trimmedLine) ||
+                      /^(FROM|WHERE|JOIN|INNER|LEFT|RIGHT|OUTER|ON|GROUP|HAVING|ORDER|LIMIT|OFFSET|SET|VALUES|INTO)/i.test(trimmedLine) ||
+                      (foundSQL && !sqlEnded && trimmedLine.length > 0 && !/^(注意|说明|解释|备注|提示|注：|说明：)[:：]/i.test(trimmedLine));
+
+    const isExplanation = /^(注意|说明|解释|备注|提示|注：|说明：)[:：]/i.test(trimmedLine);
+
+    if (isSQLLine) {
+      foundSQL = true;
+      sqlLines.push(line);
+
+      // 检查是否是 SQL 结束（以分号结尾）
+      if (/;$/.test(trimmedLine)) {
+        sqlEnded = true;
+      }
+    } else if (isExplanation || (sqlEnded && trimmedLine.length > 0)) {
+      // SQL 结束后的内容作为解释
+      explanationLines.push(line);
+    } else if (!foundSQL && trimmedLine.length > 0) {
+      // SQL 之前的内容作为解释
+      explanationLines.push(line);
+    } else if (foundSQL && !sqlEnded && trimmedLine.length === 0) {
+      // SQL 语句之间的空行保留
+      sqlLines.push(line);
+    }
+  }
+
+  // 组合结果
+  const finalSQL = sqlLines.length > 0 ? sqlLines.join('\n').trim() : cleaned;
+  const extractedExplanation = explanationLines.join('\n').trim();
+
+  // 合并所有解释内容
+  const allExplanations = [explanation, extractedExplanation].filter(e => e.length > 0);
+  const finalExplanation = allExplanations.join('\n\n');
+
+  return {
+    sql: finalSQL,
+    explanation: finalExplanation
+  };
+}
+
+// DeepSeek API 调用辅助函数
+interface DeepSeekResult {
+  success: boolean;
+  sql?: string;
+  explanation?: string;
+  error?: string;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+}
+
+async function callDeepSeekAPI(systemPrompt: string, userPrompt: string): Promise<DeepSeekResult> {
+  if (!DEEPSEEK_API_KEY) {
+    return {
+      success: false,
+      error: "DeepSeek API key not configured"
+    };
+  }
+
+  try {
+    const response = await fetch(DEEPSEEK_API_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        stream: false,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("DeepSeek API Error:", errorText);
+      return {
+        success: false,
+        error: `DeepSeek API 返回错误: ${response.status}`,
+      };
+    }
+
+    const data = await response.json();
+    const rawContent = data.choices?.[0]?.message?.content?.trim() || "";
+
+    if (!rawContent) {
+      return {
+        success: false,
+        error: "DeepSeek 未返回有效内容",
+      };
+    }
+
+    // 清理 SQL 内容，提取纯 SQL 语句和解释
+    const cleanedResult = cleanSQLResponse(rawContent);
+
+    if (!cleanedResult.sql) {
+      return {
+        success: false,
+        error: "无法从 DeepSeek 响应中提取有效的 SQL 语句",
+      };
+    }
+
+    return {
+      success: true,
+      sql: cleanedResult.sql,
+      explanation: cleanedResult.explanation,
+      usage: {
+        promptTokens: data.usage?.prompt_tokens || 0,
+        completionTokens: data.usage?.completion_tokens || 0,
+        totalTokens: data.usage?.total_tokens || 0,
+      }
+    };
+  } catch (error) {
+    console.error("DeepSeek API 调用失败:", error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 
 // 创建 API 路由器
 export const apiRouter = new Router();
@@ -226,70 +432,198 @@ apiRouter.post("/api/generate", async (ctx: Context) => {
 // AI SQL生成端点
 apiRouter.post("/api/sql-generate", async (ctx: Context) => {
   try {
-    const body = await ctx.request.body({ type: "json" }).value;
+    // 解析请求体
+    let body;
+    try {
+      body = await ctx.request.body({ type: "json" }).value;
+    } catch (parseError) {
+      console.error("请求体解析失败:", parseError);
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        error: "请求体格式错误",
+        message: parseError instanceof Error ? parseError.message : String(parseError)
+      };
+      return;
+    }
+
     const { prompt, schema, model, maxTokens = 2048, temperature = 0.7 } = body;
 
-    if (!prompt) {
+    // 验证必需参数
+    if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
       ctx.response.status = 400;
-      ctx.response.body = { error: "提示语不能为空" };
+      ctx.response.body = {
+        success: false,
+        error: "提示语不能为空"
+      };
       return;
     }
 
     if (!API_KEY) {
       ctx.response.status = 500;
-      ctx.response.body = { error: "API key not configured" };
+      ctx.response.body = {
+        success: false,
+        error: "API key not configured"
+      };
       return;
     }
 
     // 构建SQL生成的提示词
-    let systemPrompt = "你是一个专业的POSTGRESQL查询生成专家。请根据用户的需求生成高质量的SQL语句。";
+    let systemPrompt = `你是一个专业的 PostgreSQL 查询生成专家。请根据用户的需求生成高质量的 SQL 语句。
+
+**重要格式要求：**
+1. 将 SQL 代码放在 \`\`\`sql 和 \`\`\` 之间
+2. 在代码块之后，可以添加简短的说明（可选）
+3. 确保 SQL 语法正确且符合 PostgreSQL 规范
+
+**示例格式：**
+\`\`\`sql
+SELECT * FROM users WHERE age > 25;
+\`\`\`
+说明：此查询会返回所有年龄大于25岁的用户记录。`;
+
     if (schema) {
-      systemPrompt += `\n\n数据库结构信息：\n${schema}`;
+      systemPrompt += `\n\n**数据库结构信息：**\n${schema}`;
     }
-    systemPrompt += "\n\n请生成准确的SQL查询语句，确保语法正确。如果需要更多信息才能生成准确的查询，请说明。";
 
-    const fullPrompt = `${systemPrompt}\n\n用户需求：${prompt}\n\n请生成对应的SQL语句（只需要返回SQL代码，不需要额外解释）：`;
+    const fullPrompt = `${systemPrompt}\n\n**用户需求：**${prompt}\n\n请按照上述格式生成 SQL 语句：`;
 
-    const response = await fetch(`${GOOGLE_AI_BASE_ENDPOINT}${(model || MODEL_NAME).replace('models/', '')}:generateContent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-goog-api-key": API_KEY,
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{ text: fullPrompt }]
-        }],
-        generationConfig: {
-          temperature: temperature,
-          maxOutputTokens: maxTokens,
-        }
-      }),
-    });
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("Google AI API Error (SQL生成):", error);
-      console.error("请求URL:", `${GOOGLE_AI_BASE_ENDPOINT}${(model || MODEL_NAME).replace('models/', '')}:generateContent`);
-      console.error("请求payload:", JSON.stringify({
-        contents: [{
-          parts: [{ text: fullPrompt }]
-        }],
-        generationConfig: {
-          temperature: temperature,
-          maxOutputTokens: maxTokens,
-        }
-      }, null, 2));
-      ctx.response.status = response.status;
-      ctx.response.body = { error: "生成SQL失败", details: error };
+    // 调用 Google AI API
+    let response;
+    try {
+      response = await fetch(`${GOOGLE_AI_BASE_ENDPOINT}${(model || MODEL_NAME).replace('models/', '')}:generateContent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": API_KEY,
+        },
+        body: JSON.stringify({
+          contents: [{
+            parts: [{ text: fullPrompt }]
+          }],
+          generationConfig: {
+            temperature: temperature,
+            maxOutputTokens: maxTokens,
+          }
+        }),
+      });
+    } catch (fetchError) {
+      console.error("Google AI API 请求失败:", fetchError);
+      console.log("尝试使用 DeepSeek 备用接口...");
+
+      // 尝试使用 DeepSeek 备用接口
+      const deepseekResult = await callDeepSeekAPI(systemPrompt, prompt);
+
+      if (deepseekResult.success) {
+        ctx.response.body = {
+          success: true,
+          sql: deepseekResult.sql,
+          explanation: deepseekResult.explanation || "",
+          usage: deepseekResult.usage,
+          fallback: "deepseek" // 标识使用了备用接口
+        };
+        return;
+      }
+
+      // DeepSeek 也失败了，返回错误
+      ctx.response.status = 503;
+      ctx.response.body = {
+        success: false,
+        error: "所有AI服务均不可用",
+        googleError: fetchError instanceof Error ? fetchError.message : String(fetchError),
+        deepseekError: deepseekResult.error
+      };
       return;
     }
 
-    const data = await response.json();
-    const generatedSQL = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+    // 检查响应状态
+    if (!response.ok) {
+      let errorDetails;
+      try {
+        errorDetails = await response.text();
+      } catch {
+        errorDetails = "无法获取错误详情";
+      }
+
+      console.error("Google AI API Error (SQL生成):", errorDetails);
+      console.error("请求URL:", `${GOOGLE_AI_BASE_ENDPOINT}${(model || MODEL_NAME).replace('models/', '')}:generateContent`);
+      console.error("响应状态:", response.status);
+      console.log("尝试使用 DeepSeek 备用接口...");
+
+      // 尝试使用 DeepSeek 备用接口
+      const deepseekResult = await callDeepSeekAPI(systemPrompt, prompt);
+
+      console.log("DeepSeek 备用接口结果:", deepseekResult);
+      if (deepseekResult.success) {
+        ctx.response.body = {
+          success: true,
+          sql: deepseekResult.sql,
+          explanation: deepseekResult.explanation || "",
+          usage: deepseekResult.usage,
+          fallback: "deepseek" // 标识使用了备用接口
+        };
+        return;
+      }
+
+      // DeepSeek 也失败了，返回错误
+      ctx.response.status = response.status;
+      ctx.response.body = {
+        success: false,
+        error: "所有AI服务均不可用",
+        googleError: errorDetails,
+        deepseekError: deepseekResult.error
+      };
+      return;
+    }
+
+    // 解析响应 JSON
+    let data;
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      console.error("响应 JSON 解析失败:", jsonError);
+      ctx.response.status = 500;
+      ctx.response.body = {
+        success: false,
+        error: "AI响应格式错误",
+        message: jsonError instanceof Error ? jsonError.message : String(jsonError)
+      };
+      return;
+    }
+
+    // 提取生成的 SQL
+    const rawSQL = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+
+    // 验证生成结果
+    if (!rawSQL) {
+      console.error("AI未返回有效的SQL内容:", JSON.stringify(data, null, 2));
+      ctx.response.status = 500;
+      ctx.response.body = {
+        success: false,
+        error: "AI未能生成有效的SQL",
+        details: "返回内容为空"
+      };
+      return;
+    }
+
+    // 清理 SQL 内容，提取纯 SQL 语句和解释
+    const cleanedResult = cleanSQLResponse(rawSQL);
+
+    if (!cleanedResult.sql) {
+      console.error("无法从AI响应中提取有效的SQL:", rawSQL);
+      ctx.response.status = 500;
+      ctx.response.body = {
+        success: false,
+        error: "无法提取有效的SQL语句",
+        details: "响应中未找到有效的SQL代码"
+      };
+      return;
+    }
 
     ctx.response.body = {
       success: true,
-      sql: generatedSQL,
+      sql: cleanedResult.sql,
+      explanation: cleanedResult.explanation || "",
       usage: {
         promptTokens: data.usageMetadata?.promptTokenCount || 0,
         completionTokens: data.usageMetadata?.candidatesTokenCount || 0,
@@ -301,7 +635,8 @@ apiRouter.post("/api/sql-generate", async (ctx: Context) => {
     console.error("错误堆栈:", error instanceof Error ? error.stack : "无堆栈信息");
     ctx.response.status = 500;
     ctx.response.body = {
-      error: "生成SQL时发生错误", 
+      success: false,
+      error: "生成SQL时发生未知错误",
       message: error instanceof Error ? error.message : String(error),
       details: error instanceof Error ? error.stack : "无详细错误信息"
     };
