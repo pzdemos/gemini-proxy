@@ -1,0 +1,557 @@
+// deno-lint-ignore-file
+// routes/user-manage/users.ts - 用户管理路由
+import { Router, type Context } from "https://deno.land/x/oak@v12.6.1/mod.ts";
+import { query, queryOne } from "../../utils/db.ts";
+import * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
+
+// 辅助函数：将 BigInt 和 Date 转换为字符串以支持 JSON 序列化
+function convertBigIntToString(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  
+  if (typeof obj === 'bigint') {
+    return obj.toString();
+  }
+  
+  // 处理 Date 对象
+  if (obj instanceof Date) {
+    return obj.toISOString();
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => convertBigIntToString(item));
+  }
+  
+  if (typeof obj === 'object') {
+    const converted: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        converted[key] = convertBigIntToString(obj[key]);
+      }
+    }
+    return converted;
+  }
+  
+  return obj;
+}
+
+// 用户数据类型定义
+interface User {
+  user_id?: string;
+  username: string;
+  email: string;
+  password_hash?: string;
+  full_name: string;
+  is_active: boolean;
+  role_id: number;
+  created_at?: Date;
+  updated_at?: Date;
+  profile_image_url?: string | null;
+}
+
+// 创建用户路由
+export const userRouter = new Router();
+
+// 获取所有用户列表（分页）
+userRouter.get("/api/users", async (ctx: Context) => {
+  try {
+    const url = ctx.request.url;
+    const page = Number(url.searchParams.get("page")) || 1;
+    const limit = Number(url.searchParams.get("limit")) || 10;
+    const offset = (page - 1) * limit;
+    const search = url.searchParams.get("search") || "";
+
+    // 构建查询条件
+    let whereClause = "";
+    const params: any[] = [limit, offset];
+    
+    if (search) {
+      whereClause = "WHERE username ILIKE $3 OR email ILIKE $3 OR full_name ILIKE $3";
+      params.push(`%${search}%`);
+    }
+
+    // 获取总记录数
+    const countQuery = search 
+      ? `SELECT COUNT(*)::int as count FROM users WHERE username ILIKE $1 OR email ILIKE $1 OR full_name ILIKE $1`
+      : `SELECT COUNT(*)::int as count FROM users`;
+    
+    const countResult = await queryOne<{ count: number }>(
+      countQuery,
+      search ? [`%${search}%`] : []
+    );
+
+    // 获取用户列表（不返回密码哈希）
+    const users = await query<User>(
+      `SELECT 
+        user_id, username, email, full_name, is_active, 
+        role_id, created_at, updated_at, profile_image_url
+      FROM users 
+      ${whereClause}
+      ORDER BY created_at DESC
+      LIMIT $1 OFFSET $2`,
+      params
+    );
+
+    // 转换数据
+    const convertedUsers = convertBigIntToString(users);
+
+    ctx.response.body = {
+      success: true,
+      data: convertedUsers,
+      pagination: {
+        page,
+        limit,
+        total: countResult?.count || 0,
+        totalPages: Math.ceil((countResult?.count || 0) / limit),
+      },
+    };
+  } catch (error) {
+    console.error("获取用户列表失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "获取用户列表失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+// 根据 ID 获取单个用户
+userRouter.get("/api/users/:userId", async (ctx: Context) => {
+  try {
+    // @ts-ignore: params is defined by Oak router
+    const userId = ctx.params?.userId;
+
+    if (!userId) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "用户 ID 不能为空",
+      };
+      return;
+    }
+
+    const user = await queryOne<User>(
+      `SELECT 
+        user_id, username, email, full_name, is_active, 
+        role_id, created_at, updated_at, profile_image_url
+      FROM users 
+      WHERE user_id = $1`,
+      [userId]
+    );
+
+    if (!user) {
+      ctx.response.status = 404;
+      ctx.response.body = {
+        success: false,
+        message: "用户不存在",
+      };
+      return;
+    }
+
+    ctx.response.body = {
+      success: true,
+      data: convertBigIntToString(user),
+    };
+  } catch (error) {
+    console.error("获取用户详情失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "获取用户详情失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+// 创建新用户
+userRouter.post("/api/users", async (ctx: Context) => {
+  try {
+    const body = await ctx.request.body({ type: "json" }).value;
+    const { username, email, password, full_name, is_active = true, role_id = 2, profile_image_url = null } = body;
+
+    // 验证必填字段
+    if (!username || !email || !password || !full_name) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "用户名、邮箱、密码和全名为必填项",
+      };
+      return;
+    }
+
+    // 验证邮箱格式
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "邮箱格式不正确",
+      };
+      return;
+    }
+
+    // 检查用户名是否已存在
+    const existingUser = await queryOne<{ count: number }>(
+      "SELECT COUNT(*)::int as count FROM users WHERE username = $1 OR email = $2",
+      [username, email]
+    );
+
+    if (existingUser && existingUser.count > 0) {
+      ctx.response.status = 409;
+      ctx.response.body = {
+        success: false,
+        message: "用户名或邮箱已存在",
+      };
+      return;
+    }
+
+    // 加密密码
+    const password_hash = await bcrypt.hash(password);
+
+    // 插入新用户
+    const newUser = await queryOne<User>(
+      `INSERT INTO users (username, email, password_hash, full_name, is_active, role_id, profile_image_url, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+      RETURNING user_id, username, email, full_name, is_active, role_id, created_at, updated_at, profile_image_url`,
+      [username, email, password_hash, full_name, is_active, role_id, profile_image_url]
+    );
+
+    ctx.response.status = 201;
+    ctx.response.body = {
+      success: true,
+      message: "用户创建成功",
+      data: convertBigIntToString(newUser),
+    };
+  } catch (error) {
+    console.error("创建用户失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "创建用户失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+// 更新用户信息
+userRouter.put("/api/users/:userId", async (ctx: Context) => {
+  try {
+    // @ts-ignore: params is defined by Oak router
+    const userId = ctx.params?.userId;
+    const body = await ctx.request.body({ type: "json" }).value;
+    const { username, email, full_name, is_active, role_id, profile_image_url } = body;
+
+    if (!userId) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "用户 ID 不能为空",
+      };
+      return;
+    }
+
+    // 检查用户是否存在
+    const existingUser = await queryOne<User>(
+      "SELECT user_id FROM users WHERE user_id = $1",
+      [userId]
+    );
+
+    if (!existingUser) {
+      ctx.response.status = 404;
+      ctx.response.body = {
+        success: false,
+        message: "用户不存在",
+      };
+      return;
+    }
+
+    // 构建更新字段
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (username !== undefined) {
+      updates.push(`username = $${paramIndex++}`);
+      params.push(username);
+    }
+    if (email !== undefined) {
+      updates.push(`email = $${paramIndex++}`);
+      params.push(email);
+    }
+    if (full_name !== undefined) {
+      updates.push(`full_name = $${paramIndex++}`);
+      params.push(full_name);
+    }
+    if (is_active !== undefined) {
+      updates.push(`is_active = $${paramIndex++}`);
+      params.push(is_active);
+    }
+    if (role_id !== undefined) {
+      updates.push(`role_id = $${paramIndex++}`);
+      params.push(role_id);
+    }
+    if (profile_image_url !== undefined) {
+      updates.push(`profile_image_url = $${paramIndex++}`);
+      params.push(profile_image_url);
+    }
+
+    if (updates.length === 0) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "没有要更新的字段",
+      };
+      return;
+    }
+
+    // 添加 updated_at
+    updates.push(`updated_at = NOW()`);
+    params.push(userId);
+
+    // 执行更新
+    const updatedUser = await queryOne<User>(
+      `UPDATE users 
+      SET ${updates.join(", ")}
+      WHERE user_id = $${paramIndex}
+      RETURNING user_id, username, email, full_name, is_active, role_id, created_at, updated_at, profile_image_url`,
+      params
+    );
+
+    ctx.response.body = {
+      success: true,
+      message: "用户更新成功",
+      data: convertBigIntToString(updatedUser),
+    };
+  } catch (error) {
+    console.error("更新用户失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "更新用户失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+// 更新用户密码
+userRouter.patch("/api/users/:userId/password", async (ctx: Context) => {
+  try {
+    // @ts-ignore: params is defined by Oak router
+    const userId = ctx.params?.userId;
+    const body = await ctx.request.body({ type: "json" }).value;
+    const { password } = body;
+
+    if (!userId) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "用户 ID 不能为空",
+      };
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "密码长度至少为 6 位",
+      };
+      return;
+    }
+
+    // 检查用户是否存在
+    const existingUser = await queryOne<User>(
+      "SELECT user_id FROM users WHERE user_id = $1",
+      [userId]
+    );
+
+    if (!existingUser) {
+      ctx.response.status = 404;
+      ctx.response.body = {
+        success: false,
+        message: "用户不存在",
+      };
+      return;
+    }
+
+    // 加密新密码
+    const password_hash = await bcrypt.hash(password);
+
+    // 更新密码
+    await query(
+      `UPDATE users 
+      SET password_hash = $1, updated_at = NOW()
+      WHERE user_id = $2`,
+      [password_hash, userId]
+    );
+
+    ctx.response.body = {
+      success: true,
+      message: "密码更新成功",
+    };
+  } catch (error) {
+    console.error("更新密码失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "更新密码失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+// 删除用户（软删除 - 设置为不活跃）
+userRouter.delete("/api/users/:userId", async (ctx: Context) => {
+  try {
+    // @ts-ignore: params is defined by Oak router
+    const userId = ctx.params?.userId;
+    const url = ctx.request.url;
+    const hardDelete = url.searchParams.get("hard") === "true";
+
+    if (!userId) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "用户 ID 不能为空",
+      };
+      return;
+    }
+
+    // 检查用户是否存在
+    const existingUser = await queryOne<User>(
+      "SELECT user_id FROM users WHERE user_id = $1",
+      [userId]
+    );
+
+    if (!existingUser) {
+      ctx.response.status = 404;
+      ctx.response.body = {
+        success: false,
+        message: "用户不存在",
+      };
+      return;
+    }
+
+    if (hardDelete) {
+      // 硬删除
+      await query("DELETE FROM users WHERE user_id = $1", [userId]);
+      ctx.response.body = {
+        success: true,
+        message: "用户已永久删除",
+      };
+    } else {
+      // 软删除 - 设置为不活跃
+      await query(
+        "UPDATE users SET is_active = false, updated_at = NOW() WHERE user_id = $1",
+        [userId]
+      );
+      ctx.response.body = {
+        success: true,
+        message: "用户已停用",
+      };
+    }
+  } catch (error) {
+    console.error("删除用户失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "删除用户失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+// 批量操作 - 激活/停用用户
+userRouter.patch("/api/users/batch/status", async (ctx: Context) => {
+  try {
+    const body = await ctx.request.body({ type: "json" }).value;
+    const { userIds, is_active } = body;
+
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "用户 ID 列表不能为空",
+      };
+      return;
+    }
+
+    if (typeof is_active !== "boolean") {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "is_active 必须是布尔值",
+      };
+      return;
+    }
+
+    // 构建 IN 子句
+    const placeholders = userIds.map((_, i) => `$${i + 1}`).join(", ");
+    
+    await query(
+      `UPDATE users 
+      SET is_active = $${userIds.length + 1}, updated_at = NOW()
+      WHERE user_id IN (${placeholders})`,
+      [...userIds, is_active]
+    );
+
+    ctx.response.body = {
+      success: true,
+      message: `已${is_active ? "激活" : "停用"} ${userIds.length} 个用户`,
+    };
+  } catch (error) {
+    console.error("批量更新用户状态失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "批量更新用户状态失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+// 用户统计信息
+userRouter.get("/api/users/stats/summary", async (ctx: Context) => {
+  try {
+    // 总用户数
+    const totalUsers = await queryOne<{ count: number }>(
+      "SELECT COUNT(*)::int as count FROM users"
+    );
+
+    // 活跃用户数
+    const activeUsers = await queryOne<{ count: number }>(
+      "SELECT COUNT(*)::int as count FROM users WHERE is_active = true"
+    );
+
+    // 今日新增用户
+    const todayUsers = await queryOne<{ count: number }>(
+      "SELECT COUNT(*)::int as count FROM users WHERE DATE(created_at) = CURRENT_DATE"
+    );
+
+    // 本周新增用户
+    const weekUsers = await queryOne<{ count: number }>(
+      "SELECT COUNT(*)::int as count FROM users WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'"
+    );
+
+    ctx.response.body = {
+      success: true,
+      data: {
+        total: totalUsers?.count || 0,
+        active: activeUsers?.count || 0,
+        inactive: (totalUsers?.count || 0) - (activeUsers?.count || 0),
+        todayNew: todayUsers?.count || 0,
+        weekNew: weekUsers?.count || 0,
+      },
+    };
+  } catch (error) {
+    console.error("获取用户统计失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "获取用户统计失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});

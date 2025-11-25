@@ -3,6 +3,7 @@ import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { oakCors } from "https://deno.land/x/cors@v1.2.2/mod.ts";
 import { apiRouter } from "./routes/api.ts";
 import { dbRouter } from "./routes/pdb-manage/db.ts";
+import { userRouter } from "./routes/user-manage/users.ts";
 import { initDatabase, closeDatabase } from "./utils/db.ts";
 
 // 配置
@@ -12,7 +13,6 @@ const ENABLE_DB = Deno.env.get("ENABLE_DB") === "true";
 
 // 路由
 const router = new Router();
-
 
 // 健康检查端点
 router.get("/", (ctx) => {
@@ -39,6 +39,10 @@ app.use(apiRouter.allowedMethods());
 if (ENABLE_DB) {
   app.use(dbRouter.routes());
   app.use(dbRouter.allowedMethods());
+  
+  // 注册用户管理路由
+  app.use(userRouter.routes());
+  app.use(userRouter.allowedMethods());
 }
 
 // 错误处理
