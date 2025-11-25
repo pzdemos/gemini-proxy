@@ -3,6 +3,33 @@
 import { Router, type Context } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { query, queryOne } from "../../utils/db.ts";
 
+// 辅助函数：将 BigInt 转换为字符串以支持 JSON 序列化
+function convertBigIntToString(obj: any): any {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+  
+  if (typeof obj === 'bigint') {
+    return obj.toString();
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => convertBigIntToString(item));
+  }
+  
+  if (typeof obj === 'object') {
+    const converted: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        converted[key] = convertBigIntToString(obj[key]);
+      }
+    }
+    return converted;
+  }
+  
+  return obj;
+}
+
 // 创建数据库路由
 export const dbRouter = new Router();
 
@@ -283,10 +310,13 @@ dbRouter.post("/db/query", async (ctx: Context) => {
 
     const results = await query(sql, params || []);
 
+    // 转换 BigInt 为字符串以支持 JSON 序列化
+    const convertedResults = convertBigIntToString(results);
+
     ctx.response.body = {
       success: true,
-      data: results,
-      count: results.length,
+      data: convertedResults,
+      count: convertedResults.length,
       enabled: true,
     };
   } catch (error) {
@@ -341,10 +371,13 @@ dbRouter.get("/db/tables/:tableName/data", async (ctx: Context) => {
       [limit, offset]
     );
 
+    // 转换 BigInt 为字符串以支持 JSON 序列化
+    const convertedData = convertBigIntToString(data);
+
     ctx.response.body = {
       success: true,
       table: tableName,
-      data: data,
+      data: convertedData,
       pagination: {
         page: page,
         limit: limit,
