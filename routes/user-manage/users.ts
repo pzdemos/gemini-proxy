@@ -3,6 +3,8 @@
 import { Router, type Context } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { query, queryOne } from "../../utils/db.ts";
 import { convertBigIntToString } from "../../utils/json.ts";
+import { generateAccessToken, generateRefreshToken, verifyToken } from "../../utils/jwt.ts";
+import { jwtAuth, requireRole } from "../../middleware/auth.ts";
 import * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
 
 // 用户数据类型定义
@@ -22,8 +24,215 @@ interface User {
 // 创建用户路由
 export const userRouter = new Router();
 
+/**
+ * 用户登录接口
+ */
+userRouter.post("/api/auth/login", async (ctx: Context) => {
+  try {
+    const body = await ctx.request.body({ type: "json" }).value;
+    const { username, password } = body;
+
+    // 验证必填字段
+    if (!username || !password) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "用户名和密码不能为空",
+      };
+      return;
+    }
+
+    // 查询用户（包含密码哈希）
+    const user = await queryOne<User>(
+      `SELECT 
+        user_id, username, email, password_hash, full_name, 
+        is_active, role_id, created_at, updated_at, profile_image_url
+      FROM users 
+      WHERE username = $1`,
+      [username]
+    );
+
+    if (!user) {
+      ctx.response.status = 401;
+      ctx.response.body = {
+        success: false,
+        message: "用户名或密码错误",
+      };
+      return;
+    }
+
+    // 检查用户是否激活
+    if (!user.is_active) {
+      ctx.response.status = 403;
+      ctx.response.body = {
+        success: false,
+        message: "账号已被停用,请联系管理员",
+      };
+      return;
+    }
+
+    // 验证密码
+    const passwordMatch = await bcrypt.compare(password, user.password_hash!);
+    if (!passwordMatch) {
+      ctx.response.status = 401;
+      ctx.response.body = {
+        success: false,
+        message: "用户名或密码错误",
+      };
+      return;
+    }
+
+    // 生成 JWT tokens
+    const tokenPayload = {
+      userId: String(user.user_id!), // 转换 BigInt 为 string
+      username: user.username,
+      email: user.email,
+      roleId: Number(user.role_id), // 转换 BigInt 为 number
+    };
+
+    const accessToken = await generateAccessToken(tokenPayload);
+    const refreshToken = await generateRefreshToken(tokenPayload);
+
+    // 移除密码哈希
+    delete user.password_hash;
+
+    ctx.response.body = {
+      success: true,
+      message: "登录成功",
+      data: {
+        user: convertBigIntToString(user),
+        accessToken,
+        refreshToken,
+        expiresIn: 86400, // 24 小时（秒）
+      },
+    };
+  } catch (error) {
+    console.error("登录失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "登录失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+/**
+ * 刷新访问令牌接口
+ * POST /api/auth/refresh
+ */
+userRouter.post("/api/auth/refresh", async (ctx: Context) => {
+  try {
+    const body = await ctx.request.body({ type: "json" }).value;
+    const { refreshToken } = body;
+
+    if (!refreshToken) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "刷新令牌不能为空",
+      };
+      return;
+    }
+
+    // 验证刷新令牌
+    const payload = await verifyToken(refreshToken);
+    
+    if (!payload || payload.type !== "refresh") {
+      ctx.response.status = 401;
+      ctx.response.body = {
+        success: false,
+        message: "刷新令牌无效或已过期",
+      };
+      return;
+    }
+
+    // 检查用户是否仍然存在且激活
+    const user = await queryOne<User>(
+      "SELECT user_id, is_active FROM users WHERE user_id = $1",
+      [payload.userId]
+    );
+
+    if (!user || !user.is_active) {
+      ctx.response.status = 401;
+      ctx.response.body = {
+        success: false,
+        message: "用户不存在或已被停用",
+      };
+      return;
+    }
+
+    // 生成新的访问令牌
+    const newAccessToken = await generateAccessToken({
+      userId: payload.userId,
+      username: payload.username,
+      email: payload.email,
+      roleId: payload.roleId,
+    });
+
+    ctx.response.body = {
+      success: true,
+      message: "令牌刷新成功",
+      data: {
+        accessToken: newAccessToken,
+        expiresIn: 86400,
+      },
+    };
+  } catch (error) {
+    console.error("刷新令牌失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "刷新令牌失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
+/**
+ * 获取当前登录用户信息
+ */
+userRouter.get("/api/auth/me", jwtAuth, async (ctx: Context) => {
+  try {
+    // 从 context state 获取用户信息（由 jwtAuth 中间件设置）
+    const jwtUser = (ctx.state as any).user;
+
+    // 从数据库获取最新的用户信息
+    const user = await queryOne<User>(
+      `SELECT 
+        user_id, username, email, full_name, is_active, 
+        role_id, created_at, updated_at, profile_image_url
+      FROM users 
+      WHERE user_id = $1`,
+      [jwtUser.userId]
+    );
+
+    if (!user) {
+      ctx.response.status = 404;
+      ctx.response.body = {
+        success: false,
+        message: "用户不存在",
+      };
+      return;
+    }
+
+    ctx.response.body = {
+      success: true,
+      data: convertBigIntToString(user),
+    };
+  } catch (error) {
+    console.error("获取用户信息失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "获取用户信息失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
 // 获取所有用户列表（分页）
-userRouter.get("/api/users", async (ctx: Context) => {
+userRouter.get("/api/users", jwtAuth, async (ctx: Context) => {
   try {
     const url = ctx.request.url;
     const page = Number(url.searchParams.get("page")) || 1;
@@ -87,7 +296,7 @@ userRouter.get("/api/users", async (ctx: Context) => {
 });
 
 // 根据 ID 获取单个用户
-userRouter.get("/api/users/:userId", async (ctx: Context) => {
+userRouter.get("/api/users/:userId", jwtAuth, async (ctx: Context) => {
   try {
     // @ts-ignore: params is defined by Oak router
     const userId = ctx.params?.userId;
@@ -134,8 +343,8 @@ userRouter.get("/api/users/:userId", async (ctx: Context) => {
   }
 });
 
-// 创建新用户
-userRouter.post("/api/users", async (ctx: Context) => {
+// 创建新用户（仅管理员）
+userRouter.post("/api/users", jwtAuth, requireRole([1]), async (ctx: Context) => {
   try {
     const body = await ctx.request.body({ type: "json" }).value;
     const { username, email, password, full_name, is_active = true, role_id = 2, profile_image_url = null } = body;
@@ -204,8 +413,8 @@ userRouter.post("/api/users", async (ctx: Context) => {
   }
 });
 
-// 更新用户信息
-userRouter.put("/api/users/:userId", async (ctx: Context) => {
+// 更新用户信息（仅管理员）
+userRouter.put("/api/users/:userId", jwtAuth, requireRole([1]), async (ctx: Context) => {
   try {
     // @ts-ignore: params is defined by Oak router
     const userId = ctx.params?.userId;
@@ -304,8 +513,8 @@ userRouter.put("/api/users/:userId", async (ctx: Context) => {
   }
 });
 
-// 更新用户密码
-userRouter.patch("/api/users/:userId/password", async (ctx: Context) => {
+// 更新用户密码（仅管理员）
+userRouter.patch("/api/users/:userId/password", jwtAuth, requireRole([1]), async (ctx: Context) => {
   try {
     // @ts-ignore: params is defined by Oak router
     const userId = ctx.params?.userId;
@@ -371,8 +580,8 @@ userRouter.patch("/api/users/:userId/password", async (ctx: Context) => {
   }
 });
 
-// 删除用户（软删除 - 设置为不活跃）
-userRouter.delete("/api/users/:userId", async (ctx: Context) => {
+// 删除用户（软删除 - 设置为不活跃）（仅管理员）
+userRouter.delete("/api/users/:userId", jwtAuth, requireRole([1]), async (ctx: Context) => {
   try {
     // @ts-ignore: params is defined by Oak router
     const userId = ctx.params?.userId;
@@ -432,8 +641,8 @@ userRouter.delete("/api/users/:userId", async (ctx: Context) => {
   }
 });
 
-// 批量操作 - 激活/停用用户
-userRouter.patch("/api/users/batch/status", async (ctx: Context) => {
+// 批量操作 - 激活/停用用户（仅管理员）
+userRouter.patch("/api/users/batch/status", jwtAuth, requireRole([1]), async (ctx: Context) => {
   try {
     const body = await ctx.request.body({ type: "json" }).value;
     const { userIds, is_active } = body;
@@ -481,8 +690,8 @@ userRouter.patch("/api/users/batch/status", async (ctx: Context) => {
   }
 });
 
-// 用户统计信息
-userRouter.get("/api/users/stats/summary", async (ctx: Context) => {
+// 用户统计信息（仅管理员）
+userRouter.get("/api/users/stats/summary", jwtAuth, requireRole([1]), async (ctx: Context) => {
   try {
     // 总用户数
     const totalUsers = await queryOne<{ count: number }>(

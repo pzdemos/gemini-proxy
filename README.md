@@ -84,18 +84,26 @@ http://localhost:8000
 | `/api/generate`        | POST | 同步文本生成     |
 | `/api/generate-stream` | POST | 流式文本生成     |
 
+### 认证 API
+
+| 端点                | 方法 | 描述                 | 需要认证 |
+| ------------------- | ---- | -------------------- | -------- |
+| `/api/auth/login`   | POST | 用户登录             | 否       |
+| `/api/auth/refresh` | POST | 刷新访问令牌         | 否       |
+| `/api/auth/me`      | GET  | 获取当前登录用户信息 | 是       |
+
 ### 用户管理 API
 
-| 端点                          | 方法   | 描述                      |
-| ----------------------------- | ------ | ------------------------- |
-| `/api/users`                  | GET    | 获取用户列表（分页）      |
-| `/api/users/:userId`          | GET    | 获取单个用户详情          |
-| `/api/users`                  | POST   | 创建新用户                |
-| `/api/users/:userId`          | PUT    | 更新用户信息              |
-| `/api/users/:userId/password` | PATCH  | 修改用户密码              |
-| `/api/users/:userId`          | DELETE | 删除用户（软删除/硬删除） |
-| `/api/users/batch/status`     | PATCH  | 批量激活/停用用户         |
-| `/api/users/stats/summary`    | GET    | 获取用户统计信息          |
+| 端点                          | 方法   | 描述                      | 权限要求 |
+| ----------------------------- | ------ | ------------------------- | -------- |
+| `/api/users`                  | GET    | 获取用户列表（分页）      | 登录用户 |
+| `/api/users/:userId`          | GET    | 获取单个用户详情          | 登录用户 |
+| `/api/users`                  | POST   | 创建新用户                | 管理员   |
+| `/api/users/:userId`          | PUT    | 更新用户信息              | 管理员   |
+| `/api/users/:userId/password` | PATCH  | 修改用户密码              | 管理员   |
+| `/api/users/:userId`          | DELETE | 删除用户（软删除/硬删除） | 管理员   |
+| `/api/users/batch/status`     | PATCH  | 批量激活/停用用户         | 管理员   |
+| `/api/users/stats/summary`    | GET    | 获取用户统计信息          | 管理员   |
 
 ### 数据库管理 API
 
@@ -110,6 +118,152 @@ http://localhost:8000
 | `/db/query`                       | POST | 执行自定义查询     |
 | `/db/tables/create`               | POST | 创建新表           |
 | `/db/stats`                       | GET  | 获取数据库统计信息 |
+
+## 认证 API 详细文档
+
+### 1. 用户登录
+
+**请求:**
+
+```bash
+curl -X POST http://localhost:8000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "admin",
+    "password": "password123"
+  }'
+```
+
+**请求参数:**
+
+- `username` (必填): 用户名
+- `password` (必填): 密码
+
+**成功响应:**
+
+```json
+{
+  "success": true,
+  "message": "登录成功",
+  "data": {
+    "user": {
+      "user_id": "1",
+      "username": "admin",
+      "email": "admin@example.com",
+      "full_name": "System Admin",
+      "is_active": true,
+      "role_id": 1,
+      "created_at": "2025-11-25T17:21:59.300Z",
+      "updated_at": "2025-11-25T17:21:59.300Z",
+      "profile_image_url": null
+    },
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": 86400
+  }
+}
+```
+
+**错误响应:**
+
+```json
+{
+  "success": false,
+  "message": "用户名或密码错误"
+}
+```
+
+### 2. 刷新访问令牌
+
+**请求:**
+
+```bash
+curl -X POST http://localhost:8000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  }'
+```
+
+**请求参数:**
+
+- `refreshToken` (必填): 刷新令牌
+
+**成功响应:**
+
+```json
+{
+  "success": true,
+  "message": "令牌刷新成功",
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "expiresIn": 86400
+  }
+}
+```
+
+### 3. 获取当前登录用户信息
+
+**请求:**
+
+```bash
+curl http://localhost:8000/api/auth/me \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+**请求头:**
+
+- `Authorization`: Bearer {accessToken}
+
+**成功响应:**
+
+```json
+{
+  "success": true,
+  "data": {
+    "user_id": "1",
+    "username": "admin",
+    "email": "admin@example.com",
+    "full_name": "System Admin",
+    "is_active": true,
+    "role_id": 1,
+    "created_at": "2025-11-25T17:21:59.300Z",
+    "updated_at": "2025-11-25T17:21:59.300Z",
+    "profile_image_url": null
+  }
+}
+```
+
+### JWT 认证使用说明
+
+1. **登录获取 Token**: 调用 `/api/auth/login` 获取 `accessToken` 和
+   `refreshToken`
+2. **使用 Access Token**: 在需要认证的请求中,在 `Authorization` 头中携带
+   `Bearer {accessToken}`
+3. **Token 过期处理**: 当 `accessToken` 过期时,使用 `refreshToken` 调用
+   `/api/auth/refresh` 获取新的 `accessToken`
+4. **Token 有效期**:
+   - Access Token: 24 小时
+   - Refresh Token: 7 天
+
+### 中间件使用示例
+
+在需要认证的路由中使用 JWT 中间件:
+
+```typescript
+import { jwtAuth, requireRole } from "./middleware/auth.ts";
+
+// 需要认证
+router.get("/protected", jwtAuth, async (ctx) => {
+  const user = ctx.state.user;
+  ctx.response.body = { message: `Hello ${user.username}` };
+});
+
+// 需要管理员权限（role_id = 1）
+router.delete("/users/:id", jwtAuth, requireRole([1]), async (ctx) => {
+  // 删除用户逻辑
+});
+```
 
 ## 用户管理 API 详细文档
 
