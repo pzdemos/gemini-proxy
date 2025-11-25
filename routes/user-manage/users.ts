@@ -5,7 +5,7 @@ import { query, queryOne } from "../../utils/db.ts";
 import { convertBigIntToString } from "../../utils/json.ts";
 import { generateAccessToken, generateRefreshToken, verifyToken } from "../../utils/jwt.ts";
 import { jwtAuth, requireRole } from "../../middleware/auth.ts";
-import * as bcrypt from "https://deno.land/x/bcrypt@v0.4.1/mod.ts";
+import { hashPassword, verifyPassword } from "../../utils/password.ts";
 
 // 用户数据类型定义
 interface User {
@@ -72,7 +72,7 @@ userRouter.post("/api/auth/login", async (ctx: Context) => {
     }
 
     // 验证密码
-    const passwordMatch = await bcrypt.compare(password, user.password_hash!);
+    const passwordMatch = await verifyPassword(password, user.password_hash!);
     if (!passwordMatch) {
       ctx.response.status = 401;
       ctx.response.body = {
@@ -386,7 +386,7 @@ userRouter.post("/api/users", jwtAuth, requireRole([1]), async (ctx: Context) =>
     }
 
     // 加密密码
-    const password_hash = await bcrypt.hash(password);
+    const password_hash = await hashPassword(password);
 
     // 插入新用户
     const newUser = await queryOne<User>(
@@ -555,7 +555,7 @@ userRouter.patch("/api/users/:userId/password", jwtAuth, requireRole([1]), async
     }
 
     // 加密新密码
-    const password_hash = await bcrypt.hash(password);
+    const password_hash = await hashPassword(password);
 
     // 更新密码
     await query(
