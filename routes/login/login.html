@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - Gemini AI Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Axios -->
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+        .dark .glass {
+            background: rgba(17, 24, 39, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen flex items-center justify-center p-4 transition-colors duration-200">
+    <!-- 背景装饰 -->
+    <div class="fixed inset-0 overflow-hidden pointer-events-none">
+        <div class="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob"></div>
+        <div class="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-2000"></div>
+        <div class="absolute top-40 left-40 w-80 h-80 bg-pink-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 animate-blob animation-delay-4000"></div>
+    </div>
+
+    <div id="root" class="w-full max-w-md relative z-10"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // 图标组件
+        const Icons = {
+            Sun: () => (
+                <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 100 2h1z" fillRule="evenodd" clipRule="evenodd"></path>
+                </svg>
+            ),
+            Moon: () => (
+                <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path>
+                </svg>
+            ),
+            User: () => (
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                </svg>
+            ),
+            Lock: () => (
+                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                </svg>
+            ),
+            Logo: () => (
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                </svg>
+            ),
+            Loading: () => (
+                <svg className="animate-spin ml-2 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+            )
+        };
+
+        // 主题切换组件
+        const ThemeToggle = () => {
+            const [isDark, setIsDark] = useState(false);
+
+            useEffect(() => {
+                // 初始化主题
+                if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                    setIsDark(true);
+                    document.documentElement.classList.add('dark');
+                } else {
+                    setIsDark(false);
+                    document.documentElement.classList.remove('dark');
+                }
+            }, []);
+
+            const toggleTheme = () => {
+                if (isDark) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                    setIsDark(false);
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                    setIsDark(true);
+                }
+            };
+
+            return (
+                <button 
+                    onClick={toggleTheme}
+                    className="absolute -top-12 right-0 p-2 rounded-full bg-white/80 dark:bg-gray-800/80 shadow-sm hover:shadow-md transition-all"
+                >
+                    {isDark ? <Icons.Sun /> : <Icons.Moon />}
+                </button>
+            );
+        };
+
+        // 登录表单组件
+        const LoginForm = () => {
+            const [formData, setFormData] = useState({ username: '', password: '' });
+            const [loading, setLoading] = useState(false);
+            const [error, setError] = useState('');
+            const [success, setSuccess] = useState(false);
+            const [shake, setShake] = useState(false);
+
+            useEffect(() => {
+                // 检查是否已登录
+                const accessToken = localStorage.getItem('accessToken');
+                if (accessToken) {
+                    axios.get('/api/auth/me', {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    }).then(res => {
+                        // axios 默认 2xx 才会进入 then，否则进入 catch
+                        window.location.href = '/';
+                    }).catch(err => {
+                        // Token 无效
+                        localStorage.removeItem('accessToken');
+                        localStorage.removeItem('refreshToken');
+                        localStorage.removeItem('user');
+                    });
+                }
+            }, []);
+
+            const handleChange = (e) => {
+                setFormData({
+                    ...formData,
+                    [e.target.name]: e.target.value
+                });
+            };
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setLoading(true);
+                setError('');
+                
+                try {
+                    const response = await axios.post('/api/auth/login', formData);
+                    const result = response.data;
+
+                    if (result.success) {
+                        localStorage.setItem('accessToken', result.data.accessToken);
+                        localStorage.setItem('refreshToken', result.data.refreshToken);
+                        localStorage.setItem('user', JSON.stringify(result.data.user));
+                        
+                        setSuccess(true);
+                        
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 800);
+                    } else {
+                        throw new Error(result.message || '登录失败');
+                    }
+                } catch (err) {
+                    // axios 错误处理
+                    const message = err.response?.data?.message || err.message || '登录失败';
+                    setError(message);
+                    setShake(true);
+                    setTimeout(() => setShake(false), 500);
+                } finally {
+                    if (!success) { // 如果成功了就不取消 loading 状态，保持到跳转
+                        setLoading(false);
+                    }
+                }
+            };
+
+            return (
+                <div className="glass rounded-2xl shadow-xl p-8 space-y-8">
+                    <div className="text-center">
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-primary-100 text-primary-600 mb-4">
+                            <Icons.Logo />
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">欢迎回来</h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">请登录您的账号以继续使用控制台</p>
+                    </div>
+
+                    <form onSubmit={handleSubmit} className={`space-y-6 ${shake ? 'animate-pulse' : ''}`}>
+                        {error && (
+                            <div className="p-3 rounded-lg bg-red-50 text-red-500 text-sm text-center border border-red-100">
+                                {error}
+                            </div>
+                        )}
+
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">用户名</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Icons.User />
+                                    </div>
+                                    <input 
+                                        id="username" 
+                                        name="username" 
+                                        type="text" 
+                                        required 
+                                        value={formData.username}
+                                        onChange={handleChange}
+                                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all sm:text-sm" 
+                                        placeholder="请输入用户名"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">密码</label>
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Icons.Lock />
+                                    </div>
+                                    <input 
+                                        id="password" 
+                                        name="password" 
+                                        type="password" 
+                                        required 
+                                        value={formData.password}
+                                        onChange={handleChange}
+                                        className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all sm:text-sm" 
+                                        placeholder="请输入密码"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center">
+                                <input id="remember-me" name="remember-me" type="checkbox" className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded" />
+                                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 dark:text-gray-300">记住我</label>
+                            </div>
+                        </div>
+
+                        <button 
+                            type="submit" 
+                            disabled={loading || success}
+                            className={`w-full flex justify-center py-2.5 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                                success ? 'bg-green-600 hover:bg-green-700' : 'bg-primary-600 hover:bg-primary-700'
+                            }`}
+                        >
+                            {success ? '登录成功' : (loading ? '登录中...' : '登录')}
+                            {loading && !success && <Icons.Loading />}
+                        </button>
+                    </form>
+                </div>
+            );
+        };
+
+        const App = () => {
+            return (
+                <React.Fragment>
+                    <ThemeToggle />
+                    <LoginForm />
+                    
+                    <p className="mt-8 text-center text-xs text-gray-500 dark:text-gray-400">
+                        &copy; 2025 www.haoaiganfan.top All rights reserved.
+                    </p>
+                </React.Fragment>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

@@ -4,6 +4,7 @@ import { oakCors } from "https://deno.land/x/cors@v1.2.2/mod.ts";
 import { apiRouter } from "./routes/api.ts";
 import { dbRouter } from "./routes/pdb-manage/db.ts";
 import { userRouter } from "./routes/user-manage/users.ts";
+import { loginRouter } from "./routes/login/index.ts";
 import { initDatabase, closeDatabase } from "./utils/db.ts";
 
 // 配置
@@ -34,6 +35,10 @@ app.use(router.allowedMethods());
 // 注册 API 路由
 app.use(apiRouter.routes());
 app.use(apiRouter.allowedMethods());
+
+// 注册登录页面路由
+app.use(loginRouter.routes());
+app.use(loginRouter.allowedMethods());
 
 // 注册数据库路由（仅在启用数据库时）
 if (ENABLE_DB) {
