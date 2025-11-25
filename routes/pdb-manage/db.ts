@@ -2,38 +2,7 @@
 // routes/db.ts - 数据库查询路由
 import { Router, type Context } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { query, queryOne } from "../../utils/db.ts";
-
-// 辅助函数：将 BigInt 和 Date 转换为字符串以支持 JSON 序列化
-function convertBigIntToString(obj: any): any {
-  if (obj === null || obj === undefined) {
-    return obj;
-  }
-  
-  if (typeof obj === 'bigint') {
-    return obj.toString();
-  }
-  
-  // 处理 Date 对象
-  if (obj instanceof Date) {
-    return obj.toISOString();
-  }
-  
-  if (Array.isArray(obj)) {
-    return obj.map(item => convertBigIntToString(item));
-  }
-  
-  if (typeof obj === 'object') {
-    const converted: any = {};
-    for (const key in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        converted[key] = convertBigIntToString(obj[key]);
-      }
-    }
-    return converted;
-  }
-  
-  return obj;
-}
+import { convertBigIntToString } from "../../utils/json.ts";
 
 // 创建数据库路由
 export const dbRouter = new Router();
