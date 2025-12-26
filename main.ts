@@ -1,5 +1,5 @@
 // main.ts - Deno Google AI API 服务器
-import { Application, Router } from "https://deno.land/x/oak@v12.6.1/mod.ts";
+import { Application, Router, send } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { oakCors } from "https://deno.land/x/cors@v1.2.2/mod.ts";
 import { apiRouter } from "./routes/api.ts";
 import { dbRouter } from "./routes/pdb-manage/db.ts";
@@ -16,11 +16,18 @@ const ENABLE_DB = Deno.env.get("ENABLE_DB") === "true";
 const router = new Router();
 
 // 健康检查端点
-router.get("/", (ctx) => {
-  ctx.response.body = {
-    status: "ok",
-    message: "Google AI API Service is running",
-  };
+router.get("/", async (ctx) => {
+  // Serve the animated index.html placed at the repository root
+  try {
+    await send(ctx, "index.html", { root: Deno.cwd() });
+  } catch (err) {
+    // fallback to health check JSON if file not found
+    ctx.response.status = 200;
+    ctx.response.body = {
+      status: "ok",
+      message: "Google AI API Service is running",
+    };
+  }
 });
 
 // 应用设置
