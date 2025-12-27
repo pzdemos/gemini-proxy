@@ -1780,9 +1780,11 @@
             const [selectedTables, setSelectedTables] = useState([]); // 手动选择的表
             const [displayedTables, setDisplayedTables] = useState([]); // 实际显示的表
             const [selectedTable, setSelectedTable] = useState(null);
-            const [tableView, setTableView] = useState('structure'); // 'structure' or 'data'
+            const [tableView, setTableView] = useState('structure'); // 'structure', 'data', or 'indexes'
+            const [displayMode, setDisplayMode] = useState('table'); // 'table' or 'json'
             const [tableStructure, setTableStructure] = useState([]);
             const [tableData, setTableData] = useState([]);
+            const [tableIndexes, setTableIndexes] = useState([]);
             const [sql, setSql] = useState('');
             const [queryResult, setQueryResult] = useState(null);
             const [dbInfo, setDbInfo] = useState({});
@@ -1911,6 +1913,25 @@
                     }
                 } catch (error) {
                     console.error('Failed to load table data:', error);
+                    setErrorMessage(`网络错误: ${error.message || '无法连接到服务器'}`);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const loadTableIndexes = async (tableName) => {
+                setLoading(true);
+                try {
+                    const response = await fetch(`${API}/tables/${tableName}/indexes`);
+                    const data = await response.json();
+                    if (data.success) {
+                        setTableIndexes(data.data);
+                    } else {
+                        console.error('加载表索引失败:', data.message || data.error);
+                        setErrorMessage(`加载表索引失败: ${data.message || data.error || '未知错误'}`);
+                    }
+                } catch (error) {
+                    console.error('Failed to load table indexes:', error);
                     setErrorMessage(`网络错误: ${error.message || '无法连接到服务器'}`);
                 } finally {
                     setLoading(false);
@@ -2217,37 +2238,52 @@
             const handleTableSelect = async (tableName) => {
                 setSelectedTable(tableName);
                 setTableView('structure'); // 默认显示结构
+                setDisplayMode('table'); // 重置为表格模式
                 setTableData([]); // 清空之前的数据
+                setTableIndexes([]); // 清空之前的索引
                 await loadTableStructure(tableName);
             };
 
             const switchTableView = async (view) => {
                 if (view === tableView) return; // 如果已经是当前视图，不做任何操作
-                
+
                 setTableView(view);
+                setDisplayMode('table'); // 切换视图时重置为表格模式
                 if (view === 'structure' && tableStructure.length === 0) {
                     await loadTableStructure(selectedTable);
                 } else if (view === 'data' && tableData.length === 0) {
                     await loadTableData(selectedTable);
+                } else if (view === 'indexes' && tableIndexes.length === 0) {
+                    await loadTableIndexes(selectedTable);
                 }
             };
 
             const structureColumns = [
                 { field: 'column_name', title: '列名' },
-                { 
-                    field: 'data_type', 
+                {
+                    field: 'data_type',
                     title: '数据类型',
                     formatter: (value) => <span className="tag tag-blue">{value}</span>
                 },
-                { 
-                    field: 'is_nullable', 
+                {
+                    field: 'is_nullable',
                     title: '可空',
-                    formatter: (value) => value === 'YES' 
+                    formatter: (value) => value === 'YES'
                         ? <span className="tag tag-green">可空</span>
                         : <span className="tag tag-red">非空</span>
                 },
                 { field: 'column_default', title: '默认值' },
                 { field: 'character_maximum_length', title: '最大长度' }
+            ];
+
+            const indexColumns = [
+                { field: 'indexname', title: '索引名称' },
+                {
+                    field: 'indexdef',
+                    title: '索引定义',
+                    formatter: (value) => <span className="font-mono text-sm text-slate-600">{value}</span>
+                },
+                { field: 'tablespace', title: '表空间' }
             ];
 
             return (
@@ -2459,13 +2495,53 @@
                                                         >
                                                             表数据
                                                         </button>
+                                                        <button
+                                                            onClick={() => switchTableView('indexes')}
+                                                            className={`flex-1 px-4 py-2 rounded-md font-medium transition-all ${
+                                                                tableView === 'indexes'
+                                                                    ? 'bg-white text-blue-600 shadow-sm'
+                                                                    : 'text-gray-600 hover:text-gray-900'
+                                                            }`}
+                                                        >
+                                                            索引
+                                                        </button>
+                                                    </div>
+                                                    <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+                                                        <button
+                                                            onClick={() => setDisplayMode('table')}
+                                                            className={`px-3 py-2 rounded-md transition-all ${
+                                                                displayMode === 'table'
+                                                                    ? 'bg-white text-slate-700 shadow-sm'
+                                                                    : 'text-gray-500 hover:text-gray-700'
+                                                            }`}
+                                                            title="表格视图"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                            </svg>
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setDisplayMode('json')}
+                                                            className={`px-3 py-2 rounded-md transition-all ${
+                                                                displayMode === 'json'
+                                                                    ? 'bg-white text-slate-700 shadow-sm'
+                                                                    : 'text-gray-500 hover:text-gray-700'
+                                                            }`}
+                                                            title="JSON视图"
+                                                        >
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+                                                            </svg>
+                                                        </button>
                                                     </div>
                                                     <button
                                                         onClick={() => {
                                                             if (tableView === 'structure') {
                                                                 loadTableStructure(selectedTable);
-                                                            } else {
+                                                            } else if (tableView === 'data') {
                                                                 loadTableData(selectedTable);
+                                                            } else if (tableView === 'indexes') {
+                                                                loadTableIndexes(selectedTable);
                                                             }
                                                         }}
                                                         className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 transition-colors"
@@ -2484,11 +2560,63 @@
                                                         <div className="text-center">
                                                             <div className="spinner mx-auto mb-4" />
                                                             <p className="text-gray-500">
-                                                                加载{tableView === 'structure' ? '表结构' : '表数据'}中...
+                                                                加载{tableView === 'structure' ? '表结构' : tableView === 'indexes' ? '索引' : '表数据'}中...
                                                             </p>
                                                         </div>
                                                     </div>
+                                                ) : displayMode === 'json' ? (
+                                                    /* JSON 视图 */
+                                                    <div className="relative">
+                                                        <div className="absolute top-2 right-2 z-10 flex gap-2">
+                                                            <button
+                                                                onClick={() => {
+                                                                    const data = tableView === 'structure' ? tableStructure : tableView === 'indexes' ? tableIndexes : tableData;
+                                                                    const jsonStr = JSON.stringify(data, null, 2);
+                                                                    navigator.clipboard.writeText(jsonStr);
+                                                                    const btn = document.getElementById('copy-json-btn');
+                                                                    if (btn) {
+                                                                        btn.innerText = '已复制!';
+                                                                        setTimeout(() => { btn.innerText = '复制'; }, 2000);
+                                                                    }
+                                                                }}
+                                                                id="copy-json-btn"
+                                                                className="px-3 py-1.5 text-sm bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors"
+                                                            >
+                                                                复制
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    const data = tableView === 'structure' ? tableStructure : tableView === 'indexes' ? tableIndexes : tableData;
+                                                                    const jsonStr = JSON.stringify(data, null, 2);
+                                                                    const blob = new Blob([jsonStr], { type: 'application/json' });
+                                                                    const url = URL.createObjectURL(blob);
+                                                                    const a = document.createElement('a');
+                                                                    a.href = url;
+                                                                    a.download = `${selectedTable}_${tableView}_${Date.now()}.json`;
+                                                                    a.click();
+                                                                    URL.revokeObjectURL(url);
+                                                                }}
+                                                                className="px-3 py-1.5 text-sm bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors"
+                                                            >
+                                                                下载
+                                                            </button>
+                                                        </div>
+                                                        <div className="bg-slate-900 rounded-lg overflow-hidden">
+                                                            <div className="px-4 py-2 bg-slate-800 border-b border-slate-700 flex items-center gap-2">
+                                                                <span className="text-slate-400 text-sm font-mono">
+                                                                    {selectedTable}_{tableView}.json
+                                                                </span>
+                                                                <span className="text-slate-500 text-xs">
+                                                                    ({(tableView === 'structure' ? tableStructure : tableView === 'indexes' ? tableIndexes : tableData).length} 条记录)
+                                                                </span>
+                                                            </div>
+                                                            <pre className="p-4 text-sm text-gray-100 font-mono overflow-auto max-h-[600px] leading-relaxed">
+                                                                {JSON.stringify(tableView === 'structure' ? tableStructure : tableView === 'indexes' ? tableIndexes : tableData, null, 2)}
+                                                            </pre>
+                                                        </div>
+                                                    </div>
                                                 ) : (
+                                                    /* 表格视图 */
                                                     tableView === 'structure' ? (
                                                         <DataTable
                                                             data={tableStructure}
@@ -2496,11 +2624,18 @@
                                                             pageSize={10}
                                                             searchable={false}
                                                         />
+                                                    ) : tableView === 'indexes' ? (
+                                                        <DataTable
+                                                            data={tableIndexes}
+                                                            columns={indexColumns}
+                                                            pageSize={10}
+                                                            searchable={false}
+                                                        />
                                                     ) : (
                                                         <DataTable
                                                             data={tableData}
-                                                            columns={tableData.length > 0 ? 
-                                                                Object.keys(tableData[0]).map(key => ({ field: key, title: key })) : 
+                                                            columns={tableData.length > 0 ?
+                                                                Object.keys(tableData[0]).map(key => ({ field: key, title: key })) :
                                                                 []
                                                             }
                                                             pageSize={20}

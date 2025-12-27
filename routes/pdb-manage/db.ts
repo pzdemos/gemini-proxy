@@ -230,6 +230,65 @@ dbRouter.get("/db/tables/:tableName/structure", async (ctx: Context) => {
   }
 });
 
+// 获取表索引
+dbRouter.get("/db/tables/:tableName/indexes", async (ctx: Context) => {
+  try {
+    // @ts-ignore
+    const tableName = ctx?.params?.tableName as string | undefined;
+    if (!tableName) {
+      ctx.response.status = 400;
+      ctx.response.body = {
+        success: false,
+        message: "表名不能为空",
+      };
+      return;
+    }
+
+    const indexes = await query<{
+      indexname: string;
+      indexdef: string;
+      tablespace: string | null;
+    }>(
+      `
+      SELECT
+        indexname,
+        indexdef,
+        tablespace
+      FROM pg_indexes
+      WHERE tablename = $1
+      ORDER BY indexname
+    `,
+      [tableName]
+    );
+
+    if (indexes.length === 0) {
+      ctx.response.body = {
+        success: true,
+        table: tableName,
+        data: [],
+        count: 0,
+        message: "该表没有索引",
+      };
+      return;
+    }
+
+    ctx.response.body = {
+      success: true,
+      table: tableName,
+      data: indexes,
+      count: indexes.length,
+    };
+  } catch (error) {
+    console.error("获取表索引失败:", error);
+    ctx.response.status = 500;
+    ctx.response.body = {
+      success: false,
+      message: "获取表索引失败",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+});
+
 // 执行自定义查询（只读，用于安全考虑只允许 SELECT）
 dbRouter.post("/db/query", async (ctx: Context) => {
   try {
