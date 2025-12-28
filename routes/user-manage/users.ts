@@ -374,7 +374,7 @@ userRouter.get("/api/users/:userId", jwtAuth, async (ctx: Context) => {
 userRouter.post("/api/users", jwtAuth, requireRole([1]), async (ctx: Context) => {
   try {
     const body = await ctx.request.body({ type: "json" }).value;
-    const { username, email, password, nickname, phone = null, avatar = null, bio = null, is_active = true, role = 0 } = body;
+    const { username, email=null, password, nickname=null, phone = null, avatar = null, bio = null, is_active = true, role = 0 } = body;
 
     // 验证必填字段
     if (!username || !password) {
@@ -417,12 +417,12 @@ userRouter.post("/api/users", jwtAuth, requireRole([1]), async (ctx: Context) =>
     // 加密密码
     const hashedPassword = await hashPassword(password);
 
-    // 插入新用户
+    // 插入新用户 - 空字符串转为 null 以避免唯一约束冲突
     const newUser = await queryOne<User>(
       `INSERT INTO users (username, nickname, email, phone, password, avatar, bio, is_active, role, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
       RETURNING id, username, nickname, email, phone, avatar, bio, is_active, role, created_at, updated_at`,
-      [username, nickname || null, email || null, phone, hashedPassword, avatar, bio, is_active, role]
+      [username, nickname || null, email || null, phone || null, hashedPassword, avatar || null, bio || null, is_active, role]
     );
 
     ctx.response.status = 201;
@@ -489,11 +489,11 @@ userRouter.put("/api/users/:userId", jwtAuth, requireRole([1]), async (ctx: Cont
     }
     if (email !== undefined) {
       updates.push(`email = $${paramIndex++}`);
-      params.push(email);
+      params.push(email || null); // 空字符串转为 null
     }
     if (phone !== undefined) {
       updates.push(`phone = $${paramIndex++}`);
-      params.push(phone);
+      params.push(phone || null); // 空字符串转为 null
     }
     if (avatar !== undefined) {
       updates.push(`avatar = $${paramIndex++}`);
