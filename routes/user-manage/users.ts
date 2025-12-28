@@ -27,6 +27,31 @@ interface User {
 export const userRouter = new Router();
 
 /**
+ * 提供用户管理界面
+ */
+userRouter.get("/users/admin", async (ctx: Context) => {
+  const html = await Deno.readTextFile("./routes/user-manage/public/index.html");
+  ctx.response.headers.set("Content-Type", "text/html; charset=utf-8");
+  ctx.response.body = html;
+});
+
+/**
+ * 提供静态 JS 文件
+ */
+userRouter.get("/users/admin/js/:filename", async (ctx: Context) => {
+  // @ts-ignore: params is defined by Oak router
+  const filename = ctx.params?.filename;
+  if (!filename || !/^[a-zA-Z0-9_-]+\.js$/.test(filename)) {
+    ctx.response.status = 404;
+    ctx.response.body = { error: "文件不存在" };
+    return;
+  }
+  const js = await Deno.readTextFile(`./routes/user-manage/public/js/${filename}`);
+  ctx.response.headers.set("Content-Type", "application/javascript; charset=utf-8");
+  ctx.response.body = js;
+});
+
+/**
  * 用户登录接口
  */
 userRouter.post("/api/auth/login", async (ctx: Context) => {

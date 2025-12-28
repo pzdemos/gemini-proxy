@@ -1,0 +1,1469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>用户管理中心</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.shushubuyue.net/ajax/libs/tailwindcss/3.4.16/tailwind.min.js"></script>
+    <script src="https://cdn.shushubuyue.net/ajax/libs/axios/1.7.2/axios.min.js"></script>
+    <script src="/users/admin/js/api.js"></script>
+    <link rel="stylesheet" href="https://cdn.shushubuyue.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; max-height: 0; }
+            to { opacity: 1; max-height: 1000px; }
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0.9); opacity: 0; }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .slide-down {
+            animation: slideDown 0.3s ease-out;
+        }
+
+        .pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        .animate-fadeIn {
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .animate-bounceIn {
+            animation: bounceIn 0.5s ease-out;
+        }
+
+        /* 玻璃态效果 */
+        .glass {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        /* 表格样式 */
+        .data-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 14px;
+        }
+
+        .data-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: linear-gradient(to bottom, #f8fafc, #f1f5f9);
+        }
+
+        .data-table th {
+            padding: 12px 16px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            color: #475569;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 2px solid #e2e8f0;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+        }
+
+        .data-table th:hover {
+            background: rgba(59, 130, 246, 0.05);
+        }
+
+        .data-table tbody tr {
+            transition: all 0.2s;
+            border-bottom: 1px solid #f1f5f9;
+        }
+
+        .data-table tbody tr:hover {
+            background: #f0f9ff;
+            transform: translateX(2px);
+        }
+
+        .data-table td {
+            padding: 12px 16px;
+            color: #1e293b;
+        }
+
+        /* 分页样式 */
+        .pagination {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .pagination button {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            background: white;
+            color: #475569;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: #f8fafc;
+            border-color: #10b981;
+            color: #10b981;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination button.active {
+            background: #10b981;
+            color: white;
+            border-color: #10b981;
+        }
+
+        /* 输入框样式 */
+        .search-input {
+            padding: 10px 14px 10px 40px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: all 0.2s;
+            width: 100%;
+            background: white;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: #10b981;
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+        }
+
+        /* 标签样式 */
+        .tag {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .tag-blue {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+
+        .tag-green {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .tag-red {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .tag-amber {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .tag-gray {
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+
+        /* 卡片样式 */
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s;
+        }
+
+        .card:hover {
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+            transform: translateY(-2px);
+        }
+
+        /* 加载动画 */
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #10b981;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 头像样式 */
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #e2e8f0;
+        }
+
+        .avatar-placeholder {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #10b981, #059669);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        /* 模态框遮罩 */
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(4px);
+        }
+
+        /* 按钮样式 */
+        .btn-primary {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f1f5f9;
+            color: #475569;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-secondary:hover {
+            background: #e2e8f0;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 10px;
+            font-weight: 500;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#10b981',
+                        secondary: '#059669',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-gradient-to-br from-slate-50 to-emerald-50 min-h-screen">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo, useCallback } = React;
+        
+        // API 配置已移至 ./js/api.js
+        // 使用全局变量: API, TokenManager, api
+
+        // 登录页面组件
+        function LoginPage({ onLogin, showToast }) {
+            const [username, setUsername] = useState('');
+            const [password, setPassword] = useState('');
+            const [loading, setLoading] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!username || !password) {
+                    showToast('请输入用户名和密码', 'error');
+                    return;
+                }
+
+                setLoading(true);
+                const res = await axios.post(`${API}/auth/login`, { username, password }).catch(err => err.response);
+                setLoading(false);
+
+                if (res?.data?.success) {
+                    TokenManager.setToken(res.data.data.accessToken);
+                    TokenManager.setRefreshToken(res.data.data.refreshToken);
+                    TokenManager.setUser(res.data.data.user);
+                    showToast('登录成功', 'success');
+                    onLogin(res.data.data.user);
+                } else {
+                    showToast(res?.data?.message || '登录失败', 'error');
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-4">
+                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full animate-bounceIn">
+                        <div className="text-center mb-8">
+                            <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
+                                <i className="fas fa-users text-3xl text-white"></i>
+                            </div>
+                            <h1 className="text-2xl font-bold text-gray-900">用户管理中心</h1>
+                            <p className="text-gray-500 mt-2">请登录管理员账号</p>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-5">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">用户名</label>
+                                <div className="relative">
+                                    <i className="fas fa-user absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                    <input
+                                        type="text"
+                                        value={username}
+                                        onChange={(e) => setUsername(e.target.value)}
+                                        className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                                        placeholder="请输入用户名"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">密码</label>
+                                <div className="relative">
+                                    <i className="fas fa-lock absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                    <input
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                                        placeholder="请输入密码"
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full btn-primary py-3 flex items-center justify-center gap-2"
+                            >
+                                {loading ? (
+                                    <>
+                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                        登录中...
+                                    </>
+                                ) : (
+                                    <>
+                                        <i className="fas fa-sign-in-alt"></i>
+                                        登录
+                                    </>
+                                )}
+                            </button>
+                        </form>
+
+                        <p className="text-center text-sm text-gray-400 mt-6">
+                            需要管理员权限才能访问
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
+        // Toast 通知组件
+        function Toast({ message, type, onClose }) {
+            useEffect(() => {
+                const timer = setTimeout(onClose, 3000);
+                return () => clearTimeout(timer);
+            }, [onClose]);
+
+            const bgColor = type === 'success' ? 'bg-emerald-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500';
+            const icon = type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle';
+
+            return (
+                <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 ${bgColor} text-white px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-bounceIn`} style={{ zIndex: 9999 }}>
+                    <i className={`fas ${icon}`}></i>
+                    <span>{message}</span>
+                </div>
+            );
+        }
+
+        // 确认对话框组件
+        function ConfirmDialog({ title, message, onConfirm, onCancel, confirmText = "确认", cancelText = "取消", danger = false }) {
+            return (
+                <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50">
+                    <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 animate-bounceIn shadow-2xl">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
+                        <p className="text-gray-600 mb-6">{message}</p>
+                        <div className="flex gap-3 justify-end">
+                            <button onClick={onCancel} className="btn-secondary">
+                                {cancelText}
+                            </button>
+                            <button onClick={onConfirm} className={danger ? 'btn-danger' : 'btn-primary'}>
+                                {confirmText}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // 加载状态组件
+        function Loading({ text = "加载中..." }) {
+            return (
+                <div className="flex flex-col items-center justify-center py-12">
+                    <div className="spinner mb-4"></div>
+                    <p className="text-gray-500">{text}</p>
+                </div>
+            );
+        }
+
+        // 统计卡片组件
+        function StatCard({ icon, iconBg, title, value, trend, trendUp }) {
+            return (
+                <div className="card p-6 flex items-center gap-4">
+                    <div className={`w-14 h-14 rounded-2xl ${iconBg} flex items-center justify-center`}>
+                        <i className={`fas ${icon} text-xl text-white`}></i>
+                    </div>
+                    <div className="flex-1">
+                        <p className="text-sm text-gray-500 mb-1">{title}</p>
+                        <div className="flex items-baseline gap-2">
+                            <span className="text-2xl font-bold text-gray-900">{value}</span>
+                            {trend && (
+                                <span className={`text-xs font-medium ${trendUp ? 'text-emerald-500' : 'text-red-500'}`}>
+                                    <i className={`fas fa-arrow-${trendUp ? 'up' : 'down'} mr-1`}></i>
+                                    {trend}
+                                </span>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // 用户头像组件
+        function UserAvatar({ user, size = 40 }) {
+            if (user.avatar) {
+                return <img src={user.avatar} alt={user.username} className="avatar" style={{ width: size, height: size }} />;
+            }
+            const initial = (user.nickname || user.username || 'U').charAt(0).toUpperCase();
+            const colors = [
+                'from-emerald-400 to-emerald-600',
+                'from-blue-400 to-blue-600',
+                'from-purple-400 to-purple-600',
+                'from-amber-400 to-amber-600',
+                'from-pink-400 to-pink-600',
+            ];
+            const colorIndex = (user.id?.toString() || '0').charCodeAt(0) % colors.length;
+            return (
+                <div 
+                    className={`avatar-placeholder bg-gradient-to-br ${colors[colorIndex]}`} 
+                    style={{ width: size, height: size, fontSize: size * 0.4 }}
+                >
+                    {initial}
+                </div>
+            );
+        }
+
+        // 角色标签组件
+        function RoleTag({ role }) {
+            const roleMap = {
+                0: { name: '普通用户', color: 'tag-gray' },
+                1: { name: '管理员', color: 'tag-amber' },
+                2: { name: '超级管理员', color: 'tag-red' },
+            };
+            const roleInfo = roleMap[role] || roleMap[0];
+            return <span className={`tag ${roleInfo.color}`}>{roleInfo.name}</span>;
+        }
+
+        // 状态标签组件
+        function StatusTag({ isActive }) {
+            return isActive 
+                ? <span className="tag tag-green"><i className="fas fa-check-circle mr-1"></i>活跃</span>
+                : <span className="tag tag-red"><i className="fas fa-times-circle mr-1"></i>停用</span>;
+        }
+
+        // 用户表单模态框
+        function UserFormModal({ user, onClose, onSuccess, onError }) {
+            const isEdit = !!user?.id;
+            const [formData, setFormData] = useState({
+                username: user?.username || '',
+                nickname: user?.nickname || '',
+                email: user?.email || '',
+                phone: user?.phone || '',
+                password: '',
+                avatar: user?.avatar || '',
+                bio: user?.bio || '',
+                is_active: user?.is_active ?? true,
+                role: user?.role ?? 0,
+            });
+            const [submitting, setSubmitting] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                
+                if (!formData.username.trim()) {
+                    onError('用户名不能为空');
+                    return;
+                }
+                
+                if (!isEdit && !formData.password) {
+                    onError('密码不能为空');
+                    return;
+                }
+
+                setSubmitting(true);
+
+                const submitData = { ...formData };
+                if (isEdit && !submitData.password) {
+                    delete submitData.password;
+                }
+
+                const url = isEdit ? `/users/${user.id}` : `/users`;
+                const { data } = isEdit 
+                    ? await api.put(url, submitData)
+                    : await api.post(url, submitData);
+                setSubmitting(false);
+
+                if (data.success) {
+                    onSuccess(isEdit ? '用户更新成功' : '用户创建成功');
+                } else {
+                    onError(data.message || '操作失败');
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto animate-bounceIn shadow-2xl">
+                        <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+                            <h2 className="text-xl font-semibold text-gray-900">
+                                {isEdit ? '编辑用户' : '创建用户'}
+                            </h2>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        
+                        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        用户名 <span className="text-red-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formData.username}
+                                        onChange={(e) => setFormData({...formData, username: e.target.value})}
+                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                                        placeholder="请输入用户名"
+                                        maxLength={50}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">昵称</label>
+                                    <input
+                                        type="text"
+                                        value={formData.nickname}
+                                        onChange={(e) => setFormData({...formData, nickname: e.target.value})}
+                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                                        placeholder="请输入昵称"
+                                        maxLength={100}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        密码 {!isEdit && <span className="text-red-500">*</span>}
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={formData.password}
+                                        onChange={(e) => setFormData({...formData, password: e.target.value})}
+                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                                        placeholder={isEdit ? "留空则不修改密码" : "请输入密码"}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">邮箱</label>
+                                    <input
+                                        type="email"
+                                        value={formData.email}
+                                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                                        placeholder="请输入邮箱"
+                                        maxLength={100}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">手机号</label>
+                                    <input
+                                        type="tel"
+                                        value={formData.phone}
+                                        onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                                        placeholder="请输入手机号"
+                                        maxLength={20}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">头像URL</label>
+                                    <input
+                                        type="url"
+                                        value={formData.avatar}
+                                        onChange={(e) => setFormData({...formData, avatar: e.target.value})}
+                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                                        placeholder="请输入头像URL"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">角色</label>
+                                    <select
+                                        value={formData.role}
+                                        onChange={(e) => setFormData({...formData, role: Number(e.target.value)})}
+                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                                    >
+                                        <option value={0}>普通用户</option>
+                                        <option value={1}>管理员</option>
+                                        <option value={2}>超级管理员</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">状态</label>
+                                    <select
+                                        value={formData.is_active ? 'true' : 'false'}
+                                        onChange={(e) => setFormData({...formData, is_active: e.target.value === 'true'})}
+                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                                    >
+                                        <option value="true">活跃</option>
+                                        <option value="false">停用</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">个人简介</label>
+                                <textarea
+                                    value={formData.bio}
+                                    onChange={(e) => setFormData({...formData, bio: e.target.value})}
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all resize-none"
+                                    placeholder="请输入个人简介"
+                                    rows={3}
+                                ></textarea>
+                            </div>
+                            
+                            <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                                <button type="button" onClick={onClose} className="btn-secondary">
+                                    取消
+                                </button>
+                                <button type="submit" disabled={submitting} className="btn-primary flex items-center gap-2">
+                                    {submitting ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            处理中...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fas fa-save"></i>
+                                            {isEdit ? '保存修改' : '创建用户'}
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // 重置密码模态框
+        function ResetPasswordModal({ user, onClose, onSuccess, onError }) {
+            const [password, setPassword] = useState('');
+            const [confirmPassword, setConfirmPassword] = useState('');
+            const [submitting, setSubmitting] = useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                
+                if (password.length < 6) {
+                    onError('密码长度至少为6位');
+                    return;
+                }
+                
+                if (password !== confirmPassword) {
+                    onError('两次输入的密码不一致');
+                    return;
+                }
+
+                setSubmitting(true);
+
+                const { data } = await api.patch(`/users/${user.id}/password`, { password });
+                setSubmitting(false);
+
+                if (data.success) {
+                    onSuccess('密码重置成功');
+                } else {
+                    onError(data.message || '密码重置失败');
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl max-w-md w-full animate-bounceIn shadow-2xl">
+                        <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+                            <h2 className="text-xl font-semibold text-gray-900">重置密码</h2>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        
+                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                            <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-xl">
+                                <UserAvatar user={user} size={48} />
+                                <div>
+                                    <p className="font-medium text-gray-900">{user.nickname || user.username}</p>
+                                    <p className="text-sm text-gray-500">@{user.username}</p>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">新密码</label>
+                                <input
+                                    type="password"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                    placeholder="请输入新密码（至少6位）"
+                                />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">确认密码</label>
+                                <input
+                                    type="password"
+                                    value={confirmPassword}
+                                    onChange={(e) => setConfirmPassword(e.target.value)}
+                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                                    placeholder="请再次输入新密码"
+                                />
+                            </div>
+                            
+                            <div className="flex justify-end gap-3 pt-4">
+                                <button type="button" onClick={onClose} className="btn-secondary">
+                                    取消
+                                </button>
+                                <button type="submit" disabled={submitting} className="btn-primary flex items-center gap-2">
+                                    {submitting ? (
+                                        <>
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            处理中...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <i className="fas fa-key"></i>
+                                            重置密码
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // 用户详情模态框
+        function UserDetailModal({ user, onClose, onEdit, onResetPassword }) {
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '-';
+                const date = new Date(dateStr);
+                return date.toLocaleString('zh-CN');
+            };
+
+            return (
+                <div className="fixed inset-0 modal-overlay flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl max-w-lg w-full animate-bounceIn shadow-2xl">
+                        <div className="border-b border-gray-100 px-6 py-4 flex items-center justify-between">
+                            <h2 className="text-xl font-semibold text-gray-900">用户详情</h2>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
+                                <i className="fas fa-times text-xl"></i>
+                            </button>
+                        </div>
+                        
+                        <div className="p-6">
+                            <div className="flex flex-col items-center mb-6">
+                                <UserAvatar user={user} size={80} />
+                                <h3 className="mt-4 text-xl font-semibold text-gray-900">{user.nickname || user.username}</h3>
+                                <p className="text-gray-500">@{user.username}</p>
+                                <div className="mt-2 flex gap-2">
+                                    <StatusTag isActive={user.is_active} />
+                                    <RoleTag role={user.role} />
+                                </div>
+                            </div>
+                            
+                            <div className="space-y-4 text-sm">
+                                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                                    <i className="fas fa-envelope text-gray-400 w-5"></i>
+                                    <span className="text-gray-600">邮箱:</span>
+                                    <span className="text-gray-900">{user.email || '-'}</span>
+                                </div>
+                                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                                    <i className="fas fa-phone text-gray-400 w-5"></i>
+                                    <span className="text-gray-600">手机:</span>
+                                    <span className="text-gray-900">{user.phone || '-'}</span>
+                                </div>
+                                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                                    <i className="fas fa-calendar text-gray-400 w-5"></i>
+                                    <span className="text-gray-600">注册时间:</span>
+                                    <span className="text-gray-900">{formatDate(user.created_at)}</span>
+                                </div>
+                                <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                                    <i className="fas fa-clock text-gray-400 w-5"></i>
+                                    <span className="text-gray-600">更新时间:</span>
+                                    <span className="text-gray-900">{formatDate(user.updated_at)}</span>
+                                </div>
+                                {user.bio && (
+                                    <div className="p-3 bg-gray-50 rounded-xl">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <i className="fas fa-quote-left text-gray-400 w-5"></i>
+                                            <span className="text-gray-600">个人简介:</span>
+                                        </div>
+                                        <p className="text-gray-900 pl-8">{user.bio}</p>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
+                                <button onClick={() => onResetPassword(user)} className="btn-secondary flex items-center gap-2">
+                                    <i className="fas fa-key"></i>
+                                    重置密码
+                                </button>
+                                <button onClick={() => onEdit(user)} className="btn-primary flex items-center gap-2">
+                                    <i className="fas fa-edit"></i>
+                                    编辑用户
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // 主应用组件
+        function App() {
+            // 登录状态
+            const [isLoggedIn, setIsLoggedIn] = useState(TokenManager.isLoggedIn());
+            const [currentUser, setCurrentUser] = useState(TokenManager.getUser());
+
+            // 状态管理
+            const [users, setUsers] = useState([]);
+            const [stats, setStats] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [searchTerm, setSearchTerm] = useState('');
+            const [currentPage, setCurrentPage] = useState(1);
+            const [totalPages, setTotalPages] = useState(1);
+            const [totalUsers, setTotalUsers] = useState(0);
+            const [pageSize] = useState(10);
+            const [selectedUsers, setSelectedUsers] = useState(new Set());
+            
+            // 模态框状态
+            const [showUserForm, setShowUserForm] = useState(false);
+            const [editingUser, setEditingUser] = useState(null);
+            const [showUserDetail, setShowUserDetail] = useState(null);
+            const [showResetPassword, setShowResetPassword] = useState(null);
+            const [showConfirm, setShowConfirm] = useState(null);
+            
+            // Toast 状态
+            const [toast, setToast] = useState(null);
+
+            // 显示提示消息
+            const showToast = (message, type = 'info') => {
+                setToast({ message, type });
+            };
+
+            // 登录处理
+            const handleLogin = (user) => {
+                setCurrentUser(user);
+                setIsLoggedIn(true);
+            };
+
+            // 登出处理
+            const handleLogout = () => {
+                TokenManager.clear();
+                setIsLoggedIn(false);
+                setCurrentUser(null);
+                showToast('已退出登录', 'success');
+            };
+
+            // 加载用户统计
+            const loadStats = async () => {
+                const { data } = await api.get('/users/stats/summary');
+                if (data.success) {
+                    setStats(data.data);
+                }
+            };
+
+            // 加载用户列表
+            const loadUsers = async () => {
+                setLoading(true);
+                const params = { page: currentPage, limit: pageSize };
+                if (searchTerm) {
+                    params.search = searchTerm;
+                }
+
+                const { data } = await api.get('/users', { params });
+                
+                if (data.success) {
+                    setUsers(data.data || []);
+                    setTotalPages(data.pagination?.totalPages || 1);
+                    setTotalUsers(data.pagination?.total || 0);
+                }
+                setLoading(false);
+            };
+
+            // 初始加载 - hooks 必须在条件返回之前调用
+            useEffect(() => {
+                if (isLoggedIn) {
+                    loadStats();
+                }
+            }, [isLoggedIn]);
+
+            // 监听分页和搜索变化
+            useEffect(() => {
+                if (isLoggedIn) {
+                    loadUsers();
+                }
+            }, [isLoggedIn, currentPage, searchTerm]);
+
+            // 如果未登录，显示登录页面
+            if (!isLoggedIn) {
+                return (
+                    <>
+                        {toast && (
+                            <Toast 
+                                message={toast.message} 
+                                type={toast.type} 
+                                onClose={() => setToast(null)} 
+                            />
+                        )}
+                        <LoginPage onLogin={handleLogin} showToast={showToast} />
+                    </>
+                );
+            }
+
+            // 处理搜索
+            const handleSearch = (e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+            };
+
+            // 处理选择用户
+            const handleSelectUser = (userId) => {
+                const newSelected = new Set(selectedUsers);
+                if (newSelected.has(userId)) {
+                    newSelected.delete(userId);
+                } else {
+                    newSelected.add(userId);
+                }
+                setSelectedUsers(newSelected);
+            };
+
+            // 全选/取消全选
+            const handleSelectAll = () => {
+                if (selectedUsers.size === users.length) {
+                    setSelectedUsers(new Set());
+                } else {
+                    setSelectedUsers(new Set(users.map(u => u.id)));
+                }
+            };
+
+            // 删除用户
+            const handleDeleteUser = async (user, hard = false) => {
+                const url = hard ? `/users/${user.id}?hard=true` : `/users/${user.id}`;
+                const { data } = await api.delete(url);
+                
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    loadUsers();
+                    loadStats();
+                } else {
+                    showToast(data.message || '操作失败', 'error');
+                }
+                setShowConfirm(null);
+            };
+
+            // 批量操作状态
+            const handleBatchStatus = async (isActive) => {
+                if (selectedUsers.size === 0) {
+                    showToast('请先选择用户', 'error');
+                    return;
+                }
+
+                const { data } = await api.patch('/users/batch/status', {
+                    userIds: Array.from(selectedUsers),
+                    is_active: isActive,
+                });
+                
+                if (data.success) {
+                    showToast(data.message, 'success');
+                    loadUsers();
+                    loadStats();
+                    setSelectedUsers(new Set());
+                } else {
+                    showToast(data.message || '操作失败', 'error');
+                }
+            };
+
+            // 格式化日期
+            const formatDate = (dateStr) => {
+                if (!dateStr) return '-';
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('zh-CN');
+            };
+
+            return (
+                <div className="min-h-screen">
+                    {/* Toast 通知 */}
+                    {toast && (
+                        <Toast 
+                            message={toast.message} 
+                            type={toast.type} 
+                            onClose={() => setToast(null)} 
+                        />
+                    )}
+
+                    {/* 确认对话框 */}
+                    {showConfirm && (
+                        <ConfirmDialog {...showConfirm} />
+                    )}
+
+                    {/* 用户表单模态框 */}
+                    {showUserForm && (
+                        <UserFormModal
+                            user={editingUser}
+                            onClose={() => {
+                                setShowUserForm(false);
+                                setEditingUser(null);
+                            }}
+                            onSuccess={(msg) => {
+                                showToast(msg, 'success');
+                                setShowUserForm(false);
+                                setEditingUser(null);
+                                loadUsers();
+                                loadStats();
+                            }}
+                            onError={(msg) => showToast(msg, 'error')}
+                        />
+                    )}
+
+                    {/* 用户详情模态框 */}
+                    {showUserDetail && (
+                        <UserDetailModal
+                            user={showUserDetail}
+                            onClose={() => setShowUserDetail(null)}
+                            onEdit={(user) => {
+                                setShowUserDetail(null);
+                                setEditingUser(user);
+                                setShowUserForm(true);
+                            }}
+                            onResetPassword={(user) => {
+                                setShowUserDetail(null);
+                                setShowResetPassword(user);
+                            }}
+                        />
+                    )}
+
+                    {/* 重置密码模态框 */}
+                    {showResetPassword && (
+                        <ResetPasswordModal
+                            user={showResetPassword}
+                            onClose={() => setShowResetPassword(null)}
+                            onSuccess={(msg) => {
+                                showToast(msg, 'success');
+                                setShowResetPassword(null);
+                            }}
+                            onError={(msg) => showToast(msg, 'error')}
+                        />
+                    )}
+
+                    {/* 顶部导航栏 */}
+                    <header className="bg-white/80 backdrop-blur-md border-b border-gray-100 sticky top-0 z-40">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex items-center justify-between h-16">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
+                                        <i className="fas fa-users text-white"></i>
+                                    </div>
+                                    <div>
+                                        <h1 className="text-lg font-bold text-gray-900">用户管理中心</h1>
+                                        <p className="text-xs text-gray-500">User Management</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <button 
+                                        onClick={() => {
+                                            setEditingUser(null);
+                                            setShowUserForm(true);
+                                        }}
+                                        className="btn-primary flex items-center gap-2"
+                                    >
+                                        <i className="fas fa-plus"></i>
+                                        <span className="hidden sm:inline">添加用户</span>
+                                    </button>
+                                    <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+                                        <i className="fas fa-user-circle text-gray-500"></i>
+                                        <span className="text-sm text-gray-700">{currentUser?.nickname || currentUser?.username}</span>
+                                    </div>
+                                    <button 
+                                        onClick={handleLogout}
+                                        className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                        title="退出登录"
+                                    >
+                                        <i className="fas fa-sign-out-alt"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* 主内容区 */}
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        {/* 统计卡片 */}
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                            <StatCard
+                                icon="fa-users"
+                                iconBg="bg-gradient-to-br from-blue-400 to-blue-600"
+                                title="总用户数"
+                                value={stats?.total || 0}
+                            />
+                            <StatCard
+                                icon="fa-user-check"
+                                iconBg="bg-gradient-to-br from-emerald-400 to-emerald-600"
+                                title="活跃用户"
+                                value={stats?.active || 0}
+                            />
+                            <StatCard
+                                icon="fa-user-plus"
+                                iconBg="bg-gradient-to-br from-purple-400 to-purple-600"
+                                title="今日新增"
+                                value={stats?.todayNew || 0}
+                                trend={stats?.todayNew > 0 ? `+${stats.todayNew}` : null}
+                                trendUp={true}
+                            />
+                            <StatCard
+                                icon="fa-chart-line"
+                                iconBg="bg-gradient-to-br from-amber-400 to-amber-600"
+                                title="本周新增"
+                                value={stats?.weekNew || 0}
+                            />
+                        </div>
+
+                        {/* 用户列表卡片 */}
+                        <div className="card overflow-hidden">
+                            {/* 工具栏 */}
+                            <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+                                <div className="relative flex-1 max-w-md">
+                                    <i className="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                    <input
+                                        type="text"
+                                        placeholder="搜索用户名、邮箱、昵称..."
+                                        value={searchTerm}
+                                        onChange={handleSearch}
+                                        className="search-input"
+                                    />
+                                </div>
+                                
+                                {selectedUsers.size > 0 && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm text-gray-500">
+                                            已选择 {selectedUsers.size} 项
+                                        </span>
+                                        <button 
+                                            onClick={() => handleBatchStatus(true)}
+                                            className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-lg text-sm hover:bg-emerald-200 transition-colors"
+                                        >
+                                            批量激活
+                                        </button>
+                                        <button 
+                                            onClick={() => handleBatchStatus(false)}
+                                            className="px-3 py-1.5 bg-red-100 text-red-700 rounded-lg text-sm hover:bg-red-200 transition-colors"
+                                        >
+                                            批量停用
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* 表格 */}
+                            {loading ? (
+                                <Loading text="加载用户列表..." />
+                            ) : users.length === 0 ? (
+                                <div className="text-center py-16">
+                                    <div className="w-20 h-20 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
+                                        <i className="fas fa-user-slash text-3xl text-gray-400"></i>
+                                    </div>
+                                    <p className="text-gray-500 mb-4">暂无用户数据</p>
+                                    <button 
+                                        onClick={() => setShowUserForm(true)}
+                                        className="btn-primary"
+                                    >
+                                        <i className="fas fa-plus mr-2"></i>
+                                        添加第一个用户
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="data-table">
+                                        <thead>
+                                            <tr>
+                                                <th className="w-12">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedUsers.size === users.length && users.length > 0}
+                                                        onChange={handleSelectAll}
+                                                        className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                                    />
+                                                </th>
+                                                <th>用户</th>
+                                                <th className="hidden md:table-cell">邮箱</th>
+                                                <th className="hidden lg:table-cell">手机</th>
+                                                <th>角色</th>
+                                                <th>状态</th>
+                                                <th className="hidden md:table-cell">注册时间</th>
+                                                <th>操作</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {users.map((user) => (
+                                                <tr key={user.id}>
+                                                    <td>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedUsers.has(user.id)}
+                                                            onChange={() => handleSelectUser(user.id)}
+                                                            className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                                                        />
+                                                    </td>
+                                                    <td>
+                                                        <div className="flex items-center gap-3">
+                                                            <UserAvatar user={user} />
+                                                            <div>
+                                                                <p className="font-medium text-gray-900">{user.nickname || user.username}</p>
+                                                                <p className="text-sm text-gray-500">@{user.username}</p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="hidden md:table-cell text-gray-600">
+                                                        {user.email || '-'}
+                                                    </td>
+                                                    <td className="hidden lg:table-cell text-gray-600">
+                                                        {user.phone || '-'}
+                                                    </td>
+                                                    <td>
+                                                        <RoleTag role={user.role} />
+                                                    </td>
+                                                    <td>
+                                                        <StatusTag isActive={user.is_active} />
+                                                    </td>
+                                                    <td className="hidden md:table-cell text-gray-600">
+                                                        {formatDate(user.created_at)}
+                                                    </td>
+                                                    <td>
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                onClick={() => setShowUserDetail(user)}
+                                                                className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                                                                title="查看详情"
+                                                            >
+                                                                <i className="fas fa-eye"></i>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingUser(user);
+                                                                    setShowUserForm(true);
+                                                                }}
+                                                                className="p-2 text-gray-400 hover:text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
+                                                                title="编辑用户"
+                                                            >
+                                                                <i className="fas fa-edit"></i>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setShowResetPassword(user)}
+                                                                className="p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-all"
+                                                                title="重置密码"
+                                                            >
+                                                                <i className="fas fa-key"></i>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setShowConfirm({
+                                                                    title: '停用用户',
+                                                                    message: `确定要停用用户 "${user.nickname || user.username}" 吗？`,
+                                                                    confirmText: '停用',
+                                                                    danger: true,
+                                                                    onConfirm: () => handleDeleteUser(user, false),
+                                                                    onCancel: () => setShowConfirm(null),
+                                                                })}
+                                                                className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                                                title="停用用户"
+                                                            >
+                                                                <i className="fas fa-ban"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+
+                            {/* 分页 */}
+                            {totalPages > 1 && (
+                                <div className="p-4 border-t border-gray-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
+                                    <div className="text-sm text-gray-600">
+                                        共 {totalUsers} 条记录，第 {currentPage} / {totalPages} 页
+                                    </div>
+                                    <div className="pagination">
+                                        <button
+                                            onClick={() => setCurrentPage(1)}
+                                            disabled={currentPage === 1}
+                                        >
+                                            <i className="fas fa-angle-double-left"></i>
+                                        </button>
+                                        <button
+                                            onClick={() => setCurrentPage(currentPage - 1)}
+                                            disabled={currentPage === 1}
+                                        >
+                                            <i className="fas fa-angle-left"></i>
+                                        </button>
+                                        {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                                            let page;
+                                            if (totalPages <= 5) {
+                                                page = i + 1;
+                                            } else if (currentPage <= 3) {
+                                                page = i + 1;
+                                            } else if (currentPage >= totalPages - 2) {
+                                                page = totalPages - 4 + i;
+                                            } else {
+                                                page = currentPage - 2 + i;
+                                            }
+                                            if (page < 1 || page > totalPages) return null;
+                                            return (
+                                                <button
+                                                    key={page}
+                                                    onClick={() => setCurrentPage(page)}
+                                                    className={currentPage === page ? 'active' : ''}
+                                                >
+                                                    {page}
+                                                </button>
+                                            );
+                                        })}
+                                        <button
+                                            onClick={() => setCurrentPage(currentPage + 1)}
+                                            disabled={currentPage === totalPages}
+                                        >
+                                            <i className="fas fa-angle-right"></i>
+                                        </button>
+                                        <button
+                                            onClick={() => setCurrentPage(totalPages)}
+                                            disabled={currentPage === totalPages}
+                                        >
+                                            <i className="fas fa-angle-double-right"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </main>
+
+                    {/* 底部信息 */}
+                    <footer className="text-center py-6 text-sm text-gray-400">
+                        <p>用户管理中心 · Powered by Deno</p>
+                    </footer>
+                </div>
+            );
+        }
+
+        // 渲染应用
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
+
