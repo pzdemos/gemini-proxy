@@ -7,9 +7,11 @@
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.shushubuyue.net/ajax/libs/tailwindcss/3.4.16/tailwind.min.js"></script>
+    <script src="https://cdn.shushubuyue.net/ajax/libs/axios/1.7.2/axios.min.js"></script>
+    <script src="/front/api.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="https://cdn.shushubuyue.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <style>
         * {
             margin: 0;
@@ -278,8 +280,8 @@
     <script type="text/babel">
         const { useState, useEffect, useRef, useMemo, useCallback } = React;
         
-        // API配置
-        const API = '/db';
+        // API配置 - 使用 api.js 中的配置
+        const DB_API = '/db';
 
         // 自定义表格组件
         function DataTable({ data, columns, pageSize = 20, onSort, searchable = true, className = "" }) {
@@ -629,19 +631,14 @@
 
                 setSubmitting(true);
                 try {
-                    const response = await fetch(`${API}/tables/create`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            tableName,
-                            columns,
-                            primaryKey,
-                            indexes,
-                            comment: tableComment
-                        })
+                    const { data } = await api.post(`${DB_API}/tables/create`, {
+                        tableName,
+                        columns,
+                        primaryKey,
+                        indexes,
+                        comment: tableComment
                     });
 
-                    const data = await response.json();
                     if (data.success) {
                         onSuccess();
                     } else {
@@ -1772,6 +1769,10 @@
 
         // 主应用组件
         function App() {
+            // 登录状态
+            const [isLoggedIn, setIsLoggedIn] = useState(TokenManager.isLoggedIn());
+            const [currentUser, setCurrentUser] = useState(TokenManager.getUser());
+
             const [activeTab, setActiveTab] = useState('overview');
             const [loading, setLoading] = useState(false);
             const [health, setHealth] = useState(false);
@@ -1805,24 +1806,53 @@
             const [selectedTablesForAI, setSelectedTablesForAI] = useState([]); // 用于AI生成的选中表
             const [showTableSelectorForAI, setShowTableSelectorForAI] = useState(false); // 显示AI表选择器
 
+            // 登出处理
+            const handleLogout = () => {
+                TokenManager.clear();
+                TokenManager.redirectToLogin();
+            };
+
+            // 初始加载 - hooks 必须在条件返回之前调用
             useEffect(() => {
-                checkHealth();
-                loadStats();
-                loadAiModels();
-                loadDatabaseSchema();
-                const interval = setInterval(checkHealth, 30000);
-                return () => clearInterval(interval);
-            }, []);
+                if (isLoggedIn) {
+                    checkHealth();
+                    loadStats();
+                    loadAiModels();
+                    loadDatabaseSchema();
+                    const interval = setInterval(checkHealth, 30000);
+                    return () => clearInterval(interval);
+                }
+            }, [isLoggedIn]);
 
             useEffect(() => {
-                if (activeTab === 'tables') loadAvailableTables();
-                if (activeTab === 'info') loadDbInfo();
-            }, [activeTab]);
+                if (isLoggedIn) {
+                    if (activeTab === 'tables') loadAvailableTables();
+                    if (activeTab === 'info') loadDbInfo();
+                }
+            }, [isLoggedIn, activeTab]);
+
+            // 如果未登录，跳转到通用登录页面
+            useEffect(() => {
+                if (!isLoggedIn) {
+                    TokenManager.redirectToLogin();
+                }
+            }, [isLoggedIn]);
+
+            // 未登录时显示加载状态
+            if (!isLoggedIn) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+                        <div className="text-center">
+                            <div className="w-8 h-8 border-3 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                            <p className="text-gray-400">正在跳转到登录页面...</p>
+                        </div>
+                    </div>
+                );
+            }
 
             const checkHealth = async () => {
                 try {
-                    const response = await fetch(`${API}/health`);
-                    const data = await response.json();
+                    const { data } = await api.get(`${DB_API}/health`);
                     setHealth(data.success);
                 } catch {
                     setHealth(false);
@@ -1831,8 +1861,7 @@
 
             const loadStats = async () => {
                 try {
-                    const response = await fetch(`${API}/stats`);
-                    const data = await response.json();
+                    const { data } = await api.get(`${DB_API}/stats`);
                     if (data.success) setStats(data.data);
                 } catch (error) {
                     console.error('Failed to load stats:', error);
@@ -1842,8 +1871,7 @@
             const loadAvailableTables = async () => {
                 setLoading(true);
                 try {
-                    const response = await fetch(`${API}/tables`);
-                    const data = await response.json();
+                    const { data } = await api.get(`${DB_API}/tables`);
                     if (data.success) {
                         setAvailableTables(data.data);
                         // 如果没有选择任何表，默认选择前5个表
@@ -1884,8 +1912,7 @@
             const loadTableStructure = async (tableName) => {
                 setLoading(true);
                 try {
-                    const response = await fetch(`${API}/tables/${tableName}/structure`);
-                    const data = await response.json();
+                    const { data } = await api.get(`${DB_API}/tables/${tableName}/structure`);
                     if (data.success) {
                         setTableStructure(data.data);
                     } else {
@@ -1903,8 +1930,7 @@
             const loadTableData = async (tableName) => {
                 setLoading(true);
                 try {
-                    const response = await fetch(`${API}/tables/${tableName}/data?limit=100`);
-                    const data = await response.json();
+                    const { data } = await api.get(`${DB_API}/tables/${tableName}/data?limit=100`);
                     if (data.success) {
                         setTableData(data.data);
                     } else {
@@ -1922,8 +1948,7 @@
             const loadTableIndexes = async (tableName) => {
                 setLoading(true);
                 try {
-                    const response = await fetch(`${API}/tables/${tableName}/indexes`);
-                    const data = await response.json();
+                    const { data } = await api.get(`${DB_API}/tables/${tableName}/indexes`);
                     if (data.success) {
                         setTableIndexes(data.data);
                     } else {
@@ -1952,19 +1977,13 @@
                 setQueryResult(null); // 清空之前的结果
                 
                 try {
-                    const response = await fetch(`${API}/query`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ sql })
-                    });
-                    
-                    const data = await response.json();
+                    const { data, status } = await api.post(`${DB_API}/query`, { sql });
                     
                     // 即使响应成功，也要检查业务逻辑层面的错误
-                    if (!response.ok || !data.success) {
+                    if (status >= 400 || !data.success) {
                         setQueryResult({
                             success: false,
-                            error: data.error || `HTTP ${response.status}: ${response.statusText}`,
+                            error: data.error || `HTTP ${status}`,
                             message: data.message || '查询执行失败',
                             sql: sql, // 保存失败的SQL以便调试
                             timestamp: new Date().toLocaleString()
@@ -1990,8 +2009,7 @@
             const loadDbInfo = async () => {
                 setLoading(true);
                 try {
-                    const response = await fetch(`${API}/info`);
-                    const data = await response.json();
+                    const { data } = await api.get(`${DB_API}/info`);
                     if (data.success) setDbInfo(data.data);
                 } catch (error) {
                     console.error('Failed to load database info:', error);
@@ -2002,8 +2020,7 @@
 
             const loadAiModels = async () => {
                 try {
-                    const response = await fetch('/api/models');
-                    const data = await response.json();
+                    const { data } = await api.get('/api/models');
                     if (data.success && data.availableModels) {
                         setAiModels(data.availableModels);
                         // 设置默认模型
@@ -2019,8 +2036,7 @@
             const loadDatabaseSchema = async (specificTables = null) => {
                 try {
                     // 先检查数据库连接状态
-                    const healthResponse = await fetch(`${API}/health`);
-                    const healthData = await healthResponse.json();
+                    const { data: healthData } = await api.get(`${DB_API}/health`);
 
                     if (!healthData.enabled) {
                         // 数据库未启用，使用示例schema
@@ -2073,8 +2089,7 @@
                     }
 
                     // 数据库连接正常，加载实际表结构
-                    const response = await fetch(`${API}/tables`);
-                    const tablesData = await response.json();
+                    const { data: tablesData } = await api.get(`${DB_API}/tables`);
 
                     if (tablesData.success && tablesData.data && tablesData.data.length > 0) {
                         let schema = "数据库表结构信息：\n";
@@ -2095,8 +2110,7 @@
 
                         for (const table of tablesToLoad) {
                             try {
-                                const structureResponse = await fetch(`${API}/tables/${table.table_name}/structure`);
-                                const structureData = await structureResponse.json();
+                                const { data: structureData } = await api.get(`${DB_API}/tables/${table.table_name}/structure`);
 
                                 if (structureData.success && structureData.data) {
                                     schema += `\n表名: ${table.table_name}\n`;
@@ -2171,18 +2185,12 @@
                 setValidationResult(null);
                 
                 try {
-                    const response = await fetch('/api/sql-generate', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            prompt: aiPrompt,
-                            schema: databaseSchema,
-                            model: selectedAiModel,
-                            temperature: 0.7
-                        })
+                    const { data } = await api.post('/api/sql-generate', {
+                        prompt: aiPrompt,
+                        schema: databaseSchema,
+                        model: selectedAiModel,
+                        temperature: 0.7
                     });
-
-                    const data = await response.json();
                     
                     if (data.success) {
                         setGeneratedSql(data.sql);
@@ -2210,17 +2218,11 @@
                 setValidationResult(null);
                 
                 try {
-                    const response = await fetch('/api/sql-validate', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            sql: sql,
-                            model: selectedAiModel,
-                            temperature: 0.3
-                        })
+                    const { data } = await api.post('/api/sql-validate', {
+                        sql: sql,
+                        model: selectedAiModel,
+                        temperature: 0.3
                     });
-
-                    const data = await response.json();
                     
                     if (data.success) {
                         setValidationResult(data);
@@ -2348,11 +2350,24 @@
                                         <p className="text-sm text-gray-500">PostgreSQL Database Admin</p>
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <div className={`w-2 h-2 rounded-full ${health ? 'bg-green-500 pulse' : 'bg-red-500'}`} />
-                                    <span className="text-sm text-gray-600">
-                                        {health ? '连接正常' : '连接断开'}
-                                    </span>
+                                <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className={`w-2 h-2 rounded-full ${health ? 'bg-green-500 pulse' : 'bg-red-500'}`} />
+                                        <span className="text-sm text-gray-600">
+                                            {health ? '连接正常' : '连接断开'}
+                                        </span>
+                                    </div>
+                                    <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
+                                        <i className="fas fa-user-circle text-gray-500"></i>
+                                        <span className="text-sm text-gray-700">{currentUser?.nickname || currentUser?.username}</span>
+                                    </div>
+                                    <button 
+                                        onClick={handleLogout}
+                                        className="p-2 text-gray-500 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                        title="退出登录"
+                                    >
+                                        <i className="fas fa-sign-out-alt"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>

@@ -3,6 +3,7 @@
 import { Router, type Context } from "https://deno.land/x/oak@v12.6.1/mod.ts";
 import { query, queryOne } from "../../utils/db.ts";
 import { convertBigIntToString } from "../../utils/json.ts";
+import { jwtAuth, requireRole } from "../../middleware/auth.ts";
 
 // 创建数据库路由
 export const dbRouter = new Router();
@@ -19,8 +20,8 @@ dbRouter.get("/db/admin", async (ctx: Context) => {
   }
 });
 
-// 健康检查 - 测试数据库连接
-dbRouter.get("/db/health", async (ctx: Context) => {
+// 健康检查 - 测试数据库连接（需要登录）
+dbRouter.get("/db/health", jwtAuth,requireRole([1]), async (ctx: Context) => {
   try {
     // 检查数据库是否启用
     const ENABLE_DB = Deno.env.get("ENABLE_DB") === "true";
@@ -63,8 +64,8 @@ dbRouter.get("/db/health", async (ctx: Context) => {
   }
 });
 
-// 获取数据库信息
-dbRouter.get("/db/info", async (ctx: Context) => {
+// 获取数据库信息（需要登录）
+dbRouter.get("/db/info", jwtAuth,requireRole([1]), async (ctx: Context) => {
   try {
     // 检查数据库是否启用
     const ENABLE_DB = Deno.env.get("ENABLE_DB") === "true";
@@ -121,8 +122,8 @@ dbRouter.get("/db/info", async (ctx: Context) => {
   }
 });
 
-// 获取所有表列表
-dbRouter.get("/db/tables", async (ctx: Context) => {
+// 获取所有表列表（需要登录）
+dbRouter.get("/db/tables", jwtAuth,requireRole([1]), async (ctx: Context) => {
   try {
     // 检查数据库是否启用
     const ENABLE_DB = Deno.env.get("ENABLE_DB") === "true";
@@ -169,8 +170,8 @@ dbRouter.get("/db/tables", async (ctx: Context) => {
   }
 });
 
-// 获取表结构
-dbRouter.get("/db/tables/:tableName/structure", async (ctx: Context) => {
+// 获取表结构（需要登录）
+dbRouter.get("/db/tables/:tableName/structure", jwtAuth,requireRole([1]), async (ctx: Context) => {
   try {
     // @ts-ignore
     const tableName = ctx?.params?.tableName as string | undefined;
@@ -230,8 +231,8 @@ dbRouter.get("/db/tables/:tableName/structure", async (ctx: Context) => {
   }
 });
 
-// 获取表索引
-dbRouter.get("/db/tables/:tableName/indexes", async (ctx: Context) => {
+// 获取表索引（需要登录）
+dbRouter.get("/db/tables/:tableName/indexes", jwtAuth,requireRole([1]), async (ctx: Context) => {
   try {
     // @ts-ignore
     const tableName = ctx?.params?.tableName as string | undefined;
@@ -289,8 +290,8 @@ dbRouter.get("/db/tables/:tableName/indexes", async (ctx: Context) => {
   }
 });
 
-// 执行自定义查询（只读，用于安全考虑只允许 SELECT）
-dbRouter.post("/db/query", async (ctx: Context) => {
+// 执行自定义查询（需要管理员权限）
+dbRouter.post("/db/query", jwtAuth, requireRole([1]), async (ctx: Context) => {
   try {
     // 检查数据库是否启用
     const ENABLE_DB = Deno.env.get("ENABLE_DB") === "true";
@@ -364,8 +365,8 @@ dbRouter.post("/db/query", async (ctx: Context) => {
   }
 });
 
-// 获取表数据（带分页）
-dbRouter.get("/db/tables/:tableName/data", async (ctx: Context) => {
+// 获取表数据（带分页）（需要登录）
+dbRouter.get("/db/tables/:tableName/data", jwtAuth,requireRole([1]), async (ctx: Context) => {
   try {
     // @ts-ignore: params is defined by Oak router and available at runtime
     const tableName = ctx.params?.tableName as string | undefined;
@@ -429,8 +430,8 @@ dbRouter.get("/db/tables/:tableName/data", async (ctx: Context) => {
   }
 });
 
-// 创建新表
-dbRouter.post("/db/tables/create", async (ctx: Context) => {
+// 创建新表（需要管理员权限）
+dbRouter.post("/db/tables/create", jwtAuth, requireRole([1]), async (ctx: Context) => {
   try {
     const body = await ctx.request.body({ type: "json" }).value;
     const { tableName, columns, primaryKey, indexes, comment } = body;
@@ -558,8 +559,8 @@ dbRouter.post("/db/tables/create", async (ctx: Context) => {
   }
 });
 
-// 获取数据库统计信息
-dbRouter.get("/db/stats", async (ctx: Context) => {
+// 获取数据库统计信息（需要登录）
+dbRouter.get("/db/stats", jwtAuth,requireRole([1]), async (ctx: Context) => {
   try {
     // 获取表数量
     const tableCount = await queryOne<{ count: number }>(
