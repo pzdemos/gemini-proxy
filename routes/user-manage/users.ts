@@ -9,16 +9,18 @@ import { hashPassword, verifyPassword } from "../../utils/password.ts";
 
 // 用户数据类型定义
 interface User {
-  user_id?: string;
+  id?: string;
   username: string;
-  email: string;
-  password_hash?: string;
-  full_name: string;
-  is_active: boolean;
-  role_id: number;
+  nickname?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  password?: string;
+  avatar?: string | null;
+  bio?: string | null;
+  is_active?: boolean;
+  role?: number;
   created_at?: Date;
   updated_at?: Date;
-  profile_image_url?: string | null;
 }
 
 // 创建用户路由
@@ -42,12 +44,12 @@ userRouter.post("/api/auth/login", async (ctx: Context) => {
       return;
     }
 
-    // 查询用户（包含密码哈希）
+    // 查询用户（包含密码）
     const user = await queryOne<User>(
-      `SELECT 
-        user_id, username, email, password_hash, full_name, 
-        is_active, role_id, created_at, updated_at, profile_image_url
-      FROM users 
+      `SELECT
+        id, username, nickname, email, phone, password,
+        avatar, bio, is_active, role, created_at, updated_at
+      FROM users
       WHERE username = $1`,
       [username]
     );
@@ -72,7 +74,7 @@ userRouter.post("/api/auth/login", async (ctx: Context) => {
     }
 
     // 验证密码
-    const passwordMatch = await verifyPassword(password, user.password_hash!);
+    const passwordMatch = await verifyPassword(password, user.password!);
     if (!passwordMatch) {
       ctx.response.status = 401;
       ctx.response.body = {
@@ -84,17 +86,17 @@ userRouter.post("/api/auth/login", async (ctx: Context) => {
 
     // 生成 JWT tokens
     const tokenPayload = {
-      userId: String(user.user_id!), // 转换 BigInt 为 string
+      userId: String(user.id!), // 转换 BigInt 为 string
       username: user.username,
-      email: user.email,
-      roleId: Number(user.role_id), // 转换 BigInt 为 number
+      email: user.email || "",
+      roleId: Number(user.role), // 转换为 number
     };
 
     const accessToken = await generateAccessToken(tokenPayload);
     const refreshToken = await generateRefreshToken(tokenPayload);
 
-    // 移除密码哈希
-    delete user.password_hash;
+    // 移除密码
+    delete user.password;
 
     ctx.response.body = {
       success: true,
@@ -149,7 +151,7 @@ userRouter.post("/api/auth/refresh", async (ctx: Context) => {
 
     // 检查用户是否仍然存在且激活
     const user = await queryOne<User>(
-      "SELECT user_id, is_active FROM users WHERE user_id = $1",
+      "SELECT id, is_active FROM users WHERE id = $1",
       [payload.userId]
     );
 
@@ -199,11 +201,11 @@ userRouter.get("/api/auth/me", jwtAuth, async (ctx: Context) => {
 
     // 从数据库获取最新的用户信息
     const user = await queryOne<User>(
-      `SELECT 
-        user_id, username, email, full_name, is_active, 
-        role_id, created_at, updated_at, profile_image_url
-      FROM users 
-      WHERE user_id = $1`,
+      `SELECT
+        id, username, nickname, email, phone, avatar,
+        bio, is_active, role, created_at, updated_at
+      FROM users
+      WHERE id = $1`,
       [jwtUser.userId]
     );
 
@@ -243,28 +245,28 @@ userRouter.get("/api/users", jwtAuth, async (ctx: Context) => {
     // 构建查询条件
     let whereClause = "";
     const params: any[] = [limit, offset];
-    
+
     if (search) {
-      whereClause = "WHERE username ILIKE $3 OR email ILIKE $3 OR full_name ILIKE $3";
+      whereClause = "WHERE username ILIKE $3 OR email ILIKE $3 OR nickname ILIKE $3";
       params.push(`%${search}%`);
     }
 
     // 获取总记录数
-    const countQuery = search 
-      ? `SELECT COUNT(*)::int as count FROM users WHERE username ILIKE $1 OR email ILIKE $1 OR full_name ILIKE $1`
+    const countQuery = search
+      ? `SELECT COUNT(*)::int as count FROM users WHERE username ILIKE $1 OR email ILIKE $1 OR nickname ILIKE $1`
       : `SELECT COUNT(*)::int as count FROM users`;
-    
+
     const countResult = await queryOne<{ count: number }>(
       countQuery,
       search ? [`%${search}%`] : []
     );
 
-    // 获取用户列表（不返回密码哈希）
+    // 获取用户列表（不返回密码）
     const users = await query<User>(
-      `SELECT 
-        user_id, username, email, full_name, is_active, 
-        role_id, created_at, updated_at, profile_image_url
-      FROM users 
+      `SELECT
+        id, username, nickname, email, phone, avatar,
+        bio, is_active, role, created_at, updated_at
+      FROM users
       ${whereClause}
       ORDER BY created_at DESC
       LIMIT $1 OFFSET $2`,
@@ -311,11 +313,11 @@ userRouter.get("/api/users/:userId", jwtAuth, async (ctx: Context) => {
     }
 
     const user = await queryOne<User>(
-      `SELECT 
-        user_id, username, email, full_name, is_active, 
-        role_id, created_at, updated_at, profile_image_url
-      FROM users 
-      WHERE user_id = $1`,
+      `SELECT
+        id, username, nickname, email, phone, avatar,
+        bio, is_active, role, created_at, updated_at
+      FROM users
+      WHERE id = $1`,
       [userId]
     );
 
@@ -347,53 +349,55 @@ userRouter.get("/api/users/:userId", jwtAuth, async (ctx: Context) => {
 userRouter.post("/api/users", jwtAuth, requireRole([1]), async (ctx: Context) => {
   try {
     const body = await ctx.request.body({ type: "json" }).value;
-    const { username, email, password, full_name, is_active = true, role_id = 2, profile_image_url = null } = body;
+    const { username, email, password, nickname, phone = null, avatar = null, bio = null, is_active = true, role = 0 } = body;
 
     // 验证必填字段
-    if (!username || !email || !password || !full_name) {
+    if (!username || !password) {
       ctx.response.status = 400;
       ctx.response.body = {
         success: false,
-        message: "用户名、邮箱、密码和全名为必填项",
+        message: "用户名和密码为必填项",
       };
       return;
     }
 
-    // 验证邮箱格式
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      ctx.response.status = 400;
-      ctx.response.body = {
-        success: false,
-        message: "邮箱格式不正确",
-      };
-      return;
+    // 验证邮箱格式（如果提供）
+    if (email) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        ctx.response.status = 400;
+        ctx.response.body = {
+          success: false,
+          message: "邮箱格式不正确",
+        };
+        return;
+      }
     }
 
     // 检查用户名是否已存在
     const existingUser = await queryOne<{ count: number }>(
-      "SELECT COUNT(*)::int as count FROM users WHERE username = $1 OR email = $2",
-      [username, email]
+      "SELECT COUNT(*)::int as count FROM users WHERE username = $1",
+      [username]
     );
 
     if (existingUser && existingUser.count > 0) {
       ctx.response.status = 409;
       ctx.response.body = {
         success: false,
-        message: "用户名或邮箱已存在",
+        message: "用户名已存在",
       };
       return;
     }
 
     // 加密密码
-    const password_hash = await hashPassword(password);
+    const hashedPassword = await hashPassword(password);
 
     // 插入新用户
     const newUser = await queryOne<User>(
-      `INSERT INTO users (username, email, password_hash, full_name, is_active, role_id, profile_image_url, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
-      RETURNING user_id, username, email, full_name, is_active, role_id, created_at, updated_at, profile_image_url`,
-      [username, email, password_hash, full_name, is_active, role_id, profile_image_url]
+      `INSERT INTO users (username, nickname, email, phone, password, avatar, bio, is_active, role, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
+      RETURNING id, username, nickname, email, phone, avatar, bio, is_active, role, created_at, updated_at`,
+      [username, nickname || null, email || null, phone, hashedPassword, avatar, bio, is_active, role]
     );
 
     ctx.response.status = 201;
@@ -419,7 +423,7 @@ userRouter.put("/api/users/:userId", jwtAuth, requireRole([1]), async (ctx: Cont
     // @ts-ignore: params is defined by Oak router
     const userId = ctx.params?.userId;
     const body = await ctx.request.body({ type: "json" }).value;
-    const { username, email, full_name, is_active, role_id, profile_image_url } = body;
+    const { username, nickname, email, phone, avatar, bio, is_active, role } = body;
 
     if (!userId) {
       ctx.response.status = 400;
@@ -432,7 +436,7 @@ userRouter.put("/api/users/:userId", jwtAuth, requireRole([1]), async (ctx: Cont
 
     // 检查用户是否存在
     const existingUser = await queryOne<User>(
-      "SELECT user_id FROM users WHERE user_id = $1",
+      "SELECT id FROM users WHERE id = $1",
       [userId]
     );
 
@@ -454,25 +458,33 @@ userRouter.put("/api/users/:userId", jwtAuth, requireRole([1]), async (ctx: Cont
       updates.push(`username = $${paramIndex++}`);
       params.push(username);
     }
+    if (nickname !== undefined) {
+      updates.push(`nickname = $${paramIndex++}`);
+      params.push(nickname);
+    }
     if (email !== undefined) {
       updates.push(`email = $${paramIndex++}`);
       params.push(email);
     }
-    if (full_name !== undefined) {
-      updates.push(`full_name = $${paramIndex++}`);
-      params.push(full_name);
+    if (phone !== undefined) {
+      updates.push(`phone = $${paramIndex++}`);
+      params.push(phone);
+    }
+    if (avatar !== undefined) {
+      updates.push(`avatar = $${paramIndex++}`);
+      params.push(avatar);
+    }
+    if (bio !== undefined) {
+      updates.push(`bio = $${paramIndex++}`);
+      params.push(bio);
     }
     if (is_active !== undefined) {
       updates.push(`is_active = $${paramIndex++}`);
       params.push(is_active);
     }
-    if (role_id !== undefined) {
-      updates.push(`role_id = $${paramIndex++}`);
-      params.push(role_id);
-    }
-    if (profile_image_url !== undefined) {
-      updates.push(`profile_image_url = $${paramIndex++}`);
-      params.push(profile_image_url);
+    if (role !== undefined) {
+      updates.push(`role = $${paramIndex++}`);
+      params.push(role);
     }
 
     if (updates.length === 0) {
@@ -490,10 +502,10 @@ userRouter.put("/api/users/:userId", jwtAuth, requireRole([1]), async (ctx: Cont
 
     // 执行更新
     const updatedUser = await queryOne<User>(
-      `UPDATE users 
+      `UPDATE users
       SET ${updates.join(", ")}
-      WHERE user_id = $${paramIndex}
-      RETURNING user_id, username, email, full_name, is_active, role_id, created_at, updated_at, profile_image_url`,
+      WHERE id = $${paramIndex}
+      RETURNING id, username, nickname, email, phone, avatar, bio, is_active, role, created_at, updated_at`,
       params
     );
 
@@ -541,7 +553,7 @@ userRouter.patch("/api/users/:userId/password", jwtAuth, requireRole([1]), async
 
     // 检查用户是否存在
     const existingUser = await queryOne<User>(
-      "SELECT user_id FROM users WHERE user_id = $1",
+      "SELECT id FROM users WHERE id = $1",
       [userId]
     );
 
@@ -555,14 +567,14 @@ userRouter.patch("/api/users/:userId/password", jwtAuth, requireRole([1]), async
     }
 
     // 加密新密码
-    const password_hash = await hashPassword(password);
+    const hashedPassword = await hashPassword(password);
 
     // 更新密码
     await query(
-      `UPDATE users 
-      SET password_hash = $1, updated_at = NOW()
-      WHERE user_id = $2`,
-      [password_hash, userId]
+      `UPDATE users
+      SET password = $1, updated_at = NOW()
+      WHERE id = $2`,
+      [hashedPassword, userId]
     );
 
     ctx.response.body = {
@@ -599,7 +611,7 @@ userRouter.delete("/api/users/:userId", jwtAuth, requireRole([1]), async (ctx: C
 
     // 检查用户是否存在
     const existingUser = await queryOne<User>(
-      "SELECT user_id FROM users WHERE user_id = $1",
+      "SELECT id FROM users WHERE id = $1",
       [userId]
     );
 
@@ -614,7 +626,7 @@ userRouter.delete("/api/users/:userId", jwtAuth, requireRole([1]), async (ctx: C
 
     if (hardDelete) {
       // 硬删除
-      await query("DELETE FROM users WHERE user_id = $1", [userId]);
+      await query("DELETE FROM users WHERE id = $1", [userId]);
       ctx.response.body = {
         success: true,
         message: "用户已永久删除",
@@ -622,7 +634,7 @@ userRouter.delete("/api/users/:userId", jwtAuth, requireRole([1]), async (ctx: C
     } else {
       // 软删除 - 设置为不活跃
       await query(
-        "UPDATE users SET is_active = false, updated_at = NOW() WHERE user_id = $1",
+        "UPDATE users SET is_active = false, updated_at = NOW() WHERE id = $1",
         [userId]
       );
       ctx.response.body = {
@@ -666,12 +678,12 @@ userRouter.patch("/api/users/batch/status", jwtAuth, requireRole([1]), async (ct
     }
 
     // 构建 IN 子句
-    const placeholders = userIds.map((_, i) => `$${i + 1}`).join(", ");
-    
+    const placeholders = userIds.map((_: any, i: number) => `$${i + 1}`).join(", ");
+
     await query(
-      `UPDATE users 
+      `UPDATE users
       SET is_active = $${userIds.length + 1}, updated_at = NOW()
-      WHERE user_id IN (${placeholders})`,
+      WHERE id IN (${placeholders})`,
       [...userIds, is_active]
     );
 
