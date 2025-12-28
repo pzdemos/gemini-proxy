@@ -65,7 +65,7 @@ api.interceptors.response.use(
             const refreshToken = TokenManager.getRefreshToken();
             
             if (refreshToken) {
-                const res = await axios.post(`${API}/auth/refresh`, { refreshToken }).catch(() => null);
+                const res = await axios.post(`${API}/api/auth/refresh`, { refreshToken }).catch(() => null);
                 if (res?.data?.success && res?.data?.data?.accessToken) {
                     TokenManager.setToken(res.data.data.accessToken);
                     originalRequest.headers.Authorization = `Bearer ${res.data.data.accessToken}`;
@@ -78,7 +78,14 @@ api.interceptors.response.use(
             return Promise.reject(error);
         }
         
-        // 处理其他错误（包括 403），返回响应数据以便业务层处理
+        // 处理 403 权限不足 - 清除 token 并跳转到登录页
+        if (status === 403) {
+            TokenManager.clear();
+            TokenManager.redirectToLogin();
+            return Promise.reject(error);
+        }
+        
+        // 处理其他错误，返回响应数据以便业务层处理
         if (error.response) {
             return Promise.resolve(error.response);
         }
