@@ -5,25 +5,30 @@
 
 // API配置 - 使用 globalThis.location.origin 确保本地和线上都能正常访问
 const BASE_URL = globalThis.location.origin;
-const API = `${BASE_URL}/api`;
+const API = `${BASE_URL}`;
 
-// Token 管理
+// Token 管理 - 使用与通用登录页相同的键名
 const TokenManager = {
-    getToken: () => localStorage.getItem('access_token'),
-    setToken: (token) => localStorage.setItem('access_token', token),
-    getRefreshToken: () => localStorage.getItem('refresh_token'),
-    setRefreshToken: (token) => localStorage.setItem('refresh_token', token),
+    getToken: () => localStorage.getItem('accessToken'),
+    setToken: (token) => localStorage.setItem('accessToken', token),
+    getRefreshToken: () => localStorage.getItem('refreshToken'),
+    setRefreshToken: (token) => localStorage.setItem('refreshToken', token),
     getUser: () => {
-        const user = localStorage.getItem('user_info');
+        const user = localStorage.getItem('user');
         return user ? JSON.parse(user) : null;
     },
-    setUser: (user) => localStorage.setItem('user_info', JSON.stringify(user)),
+    setUser: (user) => localStorage.setItem('user', JSON.stringify(user)),
     clear: () => {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user_info');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
     },
-    isLoggedIn: () => !!localStorage.getItem('access_token'),
+    isLoggedIn: () => !!localStorage.getItem('accessToken'),
+    // 跳转到登录页
+    redirectToLogin: () => {
+        const currentPath = globalThis.location.pathname;
+        globalThis.location.href = `/login?redirect=${encodeURIComponent(currentPath)}`;
+    },
 };
 
 // 创建 axios 实例
@@ -67,9 +72,9 @@ api.interceptors.response.use(
                     return api(originalRequest);
                 }
             }
-            // 刷新失败，清除 token 并刷新页面
+            // 刷新失败，清除 token 并跳转到登录页
             TokenManager.clear();
-            globalThis.location.reload();
+            TokenManager.redirectToLogin();
             return Promise.reject(error);
         }
         

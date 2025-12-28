@@ -9,7 +9,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.shushubuyue.net/ajax/libs/tailwindcss/3.4.16/tailwind.min.js"></script>
     <script src="https://cdn.shushubuyue.net/ajax/libs/axios/1.7.2/axios.min.js"></script>
-    <script src="/users/admin/js/api.js"></script>
+    <script src="/front/api.js"></script>
     <link rel="stylesheet" href="https://cdn.shushubuyue.net/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
     <style>
         * {
@@ -346,101 +346,6 @@
         // API 配置已移至 ./js/api.js
         // 使用全局变量: API, TokenManager, api
 
-        // 登录页面组件
-        function LoginPage({ onLogin, showToast }) {
-            const [username, setUsername] = useState('');
-            const [password, setPassword] = useState('');
-            const [loading, setLoading] = useState(false);
-
-            const handleSubmit = async (e) => {
-                e.preventDefault();
-                if (!username || !password) {
-                    showToast('请输入用户名和密码', 'error');
-                    return;
-                }
-
-                setLoading(true);
-                const res = await axios.post(`${API}/auth/login`, { username, password }).catch(err => err.response);
-                setLoading(false);
-
-                if (res?.data?.success) {
-                    TokenManager.setToken(res.data.data.accessToken);
-                    TokenManager.setRefreshToken(res.data.data.refreshToken);
-                    TokenManager.setUser(res.data.data.user);
-                    showToast('登录成功', 'success');
-                    onLogin(res.data.data.user);
-                } else {
-                    showToast(res?.data?.message || '登录失败', 'error');
-                }
-            };
-
-            return (
-                <div className="min-h-screen flex items-center justify-center p-4">
-                    <div className="bg-white rounded-3xl shadow-2xl p-8 max-w-md w-full animate-bounceIn">
-                        <div className="text-center mb-8">
-                            <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
-                                <i className="fas fa-users text-3xl text-white"></i>
-                            </div>
-                            <h1 className="text-2xl font-bold text-gray-900">用户管理中心</h1>
-                            <p className="text-gray-500 mt-2">请登录管理员账号</p>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="space-y-5">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">用户名</label>
-                                <div className="relative">
-                                    <i className="fas fa-user absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                                    <input
-                                        type="text"
-                                        value={username}
-                                        onChange={(e) => setUsername(e.target.value)}
-                                        className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                                        placeholder="请输入用户名"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">密码</label>
-                                <div className="relative">
-                                    <i className="fas fa-lock absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                                    <input
-                                        type="password"
-                                        value={password}
-                                        onChange={(e) => setPassword(e.target.value)}
-                                        className="w-full pl-11 pr-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
-                                        placeholder="请输入密码"
-                                    />
-                                </div>
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full btn-primary py-3 flex items-center justify-center gap-2"
-                            >
-                                {loading ? (
-                                    <>
-                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        登录中...
-                                    </>
-                                ) : (
-                                    <>
-                                        <i className="fas fa-sign-in-alt"></i>
-                                        登录
-                                    </>
-                                )}
-                            </button>
-                        </form>
-
-                        <p className="text-center text-sm text-gray-400 mt-6">
-                            需要管理员权限才能访问
-                        </p>
-                    </div>
-                </div>
-            );
-        }
-
         // Toast 通知组件
         function Toast({ message, type, onClose }) {
             useEffect(() => {
@@ -590,7 +495,7 @@
                     delete submitData.password;
                 }
 
-                const url = isEdit ? `/users/${user.id}` : `/users`;
+                const url = isEdit ? `/api/users/${user.id}` : `/api/users`;
                 const { data } = isEdit 
                     ? await api.put(url, submitData)
                     : await api.post(url, submitData);
@@ -773,7 +678,7 @@
 
                 setSubmitting(true);
 
-                const { data } = await api.patch(`/users/${user.id}/password`, { password });
+                const { data } = await api.patch(`/api/users/${user.id}/password`, { password });
                 setSubmitting(false);
 
                 if (data.success) {
@@ -957,23 +862,15 @@
                 setToast({ message, type });
             };
 
-            // 登录处理
-            const handleLogin = (user) => {
-                setCurrentUser(user);
-                setIsLoggedIn(true);
-            };
-
             // 登出处理
             const handleLogout = () => {
                 TokenManager.clear();
-                setIsLoggedIn(false);
-                setCurrentUser(null);
-                showToast('已退出登录', 'success');
+                TokenManager.redirectToLogin();
             };
 
             // 加载用户统计
             const loadStats = async () => {
-                const { data } = await api.get('/users/stats/summary');
+                const { data } = await api.get('/api/users/stats/summary');
                 if (data.success) {
                     setStats(data.data);
                 }
@@ -987,7 +884,7 @@
                     params.search = searchTerm;
                 }
 
-                const { data } = await api.get('/users', { params });
+                const { data } = await api.get('/api/users', { params });
                 
                 if (data.success) {
                     setUsers(data.data || []);
@@ -1011,19 +908,22 @@
                 }
             }, [isLoggedIn, currentPage, searchTerm]);
 
-            // 如果未登录，显示登录页面
+            // 如果未登录，跳转到通用登录页面
+            useEffect(() => {
+                if (!isLoggedIn) {
+                    TokenManager.redirectToLogin();
+                }
+            }, [isLoggedIn]);
+
+            // 未登录时显示加载状态
             if (!isLoggedIn) {
                 return (
-                    <>
-                        {toast && (
-                            <Toast 
-                                message={toast.message} 
-                                type={toast.type} 
-                                onClose={() => setToast(null)} 
-                            />
-                        )}
-                        <LoginPage onLogin={handleLogin} showToast={showToast} />
-                    </>
+                    <div className="min-h-screen flex items-center justify-center">
+                        <div className="text-center">
+                            <div className="spinner mx-auto mb-4"></div>
+                            <p className="text-gray-500">正在跳转到登录页面...</p>
+                        </div>
+                    </div>
                 );
             }
 
@@ -1055,7 +955,7 @@
 
             // 删除用户
             const handleDeleteUser = async (user, hard = false) => {
-                const url = hard ? `/users/${user.id}?hard=true` : `/users/${user.id}`;
+                const url = hard ? `/api/users/${user.id}?hard=true` : `/api/users/${user.id}`;
                 const { data } = await api.delete(url);
                 
                 if (data.success) {
@@ -1075,7 +975,7 @@
                     return;
                 }
 
-                const { data } = await api.patch('/users/batch/status', {
+                const { data } = await api.patch('/api/users/batch/status', {
                     userIds: Array.from(selectedUsers),
                     is_active: isActive,
                 });

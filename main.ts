@@ -20,7 +20,7 @@ router.get("/", async (ctx) => {
   // Serve the animated index.html placed at the repository root
   try {
     await send(ctx, "index.html", { root: Deno.cwd() });
-  } catch (err) {
+  } catch (_err) {
     // fallback to health check JSON if file not found
     ctx.response.status = 200;
     ctx.response.body = {
@@ -28,6 +28,11 @@ router.get("/", async (ctx) => {
       message: "Google AI API Service is running",
     };
   }
+});
+// 将根目录下的front目录挂载为静态资源
+router.get("/front/:path+", async (ctx) => {
+  const filePath = ctx.params.path ?? "";
+  await send(ctx, filePath, { root: `${Deno.cwd()}/front` });
 });
 
 // 应用设置
